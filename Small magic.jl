@@ -135,79 +135,6 @@ begin
 	plot!(x_data, tSZ_nonrel(x_data, best_p_nr); label="Non-relativistic tSZ Fit", lw=2, color=:green)
 end
 
-# ╔═╡ 055586a7-1b84-4fd0-bb89-054b92c7bbc5
-begin
-	begin
-	    # --- Load Data ---
-	    x_data_rel = CSV.read("nu_eff.txt", DataFrame)[:, 1]
-	    y_data_rel = NPZ.npzread("Te_10.0_Yrel.npy")
-	    N_rel = min(length(x_data_rel), length(y_data_rel))
-	    x_data_rel = x_data_rel[1:N_rel]
-	    y_data_rel = y_data_rel[1:N_rel]
-	    y_err_rel = fill(0.1, N_rel)
-	
-	    # --- Filter out problematic x_data_rel values ---
-	    mask_rel = x_data_rel .> 0.01
-	    x_data_rel = x_data_rel[mask_rel]
-	    y_data_rel = y_data_rel[mask_rel]
-	    y_err_rel = y_err_rel[mask_rel]
-	
-	    # --- Linear Fit ---
-	    gradient_range_rel = -0.1:0.001:0.1
-	    intercept_range_rel = -5:0.1:5
-	    chi_matrix_rel = zeros(length(intercept_range_rel), length(gradient_range_rel))
-	    for (i, b) in enumerate(intercept_range_rel)
-	        for (j, a) in enumerate(gradient_range_rel)
-	            expected_rel = a .* x_data_rel .+ b
-	            chi2_rel = sum(((y_data_rel .- expected_rel) ./ y_err_rel).^2)
-	            chi_matrix_rel[i, j] = chi2_rel
-	        end
-	    end
-	    min_val_rel, min_idx_rel = findmin(chi_matrix_rel)
-	    best_gradient_rel = gradient_range_rel[min_idx_rel[2]]
-	    best_intercept_rel = intercept_range_rel[min_idx_rel[1]]
-	    println("Relativistic tSZ Linear Fit:")
-	    println("Minimum χ²: ", min_val_rel)
-	    println("Best Gradient (a): ", best_gradient_rel)
-	    println("Best Intercept (b): ", best_intercept_rel)
-	
-	    # --- Relativistic tSZ Model (simple approximation) ---
-		function tSZ_relativistic(x, p)
-			amplitude, Te = p
-			eps = 1e-8
-			denom = exp.(x) .- 1 .+ eps
-			# Replace any zero or negative values in denom with eps to avoid division by zero or NaNs
-			denom = map(d -> d > eps ? d : eps, denom)
-			g_x = x .* (exp.(x) .+ 1) ./ denom .- 4
-			delta_g = Te * 0.02 .* g_x  # Placeholder for actual relativistic correction
-			return amplitude .* (g_x .+ delta_g)
-		end
-	
-	    # --- Non-linear Fit ---
-	    p0_rel = [1.0, 10.0]
-	    fit_rel = curve_fit(
-	        (x, p) -> tSZ_relativistic(x, p) ./ y_err_rel,
-	        x_data_rel,
-	        y_data_rel ./ y_err_rel,
-	        p0_rel
-	    )
-	    best_p_rel = fit_rel.param
-	    chi2_nonlinear_rel = sum(((y_data_rel .- tSZ_relativistic(x_data_rel, best_p_rel)) ./ y_err_rel).^2)
-	    println("\nRelativistic tSZ Non-linear Fit:")
-	    println("Best parameters: ", best_p_rel)
-	    println("Minimum χ²: ", chi2_nonlinear_rel)
-	
-	    # --- Plot Data and Fits ---
-	    scatter(x_data_rel, y_data_rel; yerr=y_err_rel, label="Data", xlabel="Frequency", ylabel="SZ Signal", title="Relativistic tSZ Data and Fits")
-	    plot!(x_data_rel, best_gradient_rel .* x_data_rel .+ best_intercept_rel; label="Linear Fit", lw=2, color=:blue)
-	    plot!(x_data_rel, tSZ_relativistic(x_data_rel, best_p_rel); label="Relativistic tSZ Fit", lw=2, color=:magenta)
-	end
-end
-
-
-# ╔═╡ 121d17c8-a192-4478-a3a8-ff01a7f8cbb0
-
-
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -1853,8 +1780,6 @@ version = "1.9.2+0"
 # ╠═41b70e7f-ad52-4383-810c-54b2fcd9a8a4
 # ╟─7dc741d5-1730-4277-9ab0-a6540d18e487
 # ╠═5004ae21-8b30-4673-bc68-a7f0536a32e5
-# ╠═055586a7-1b84-4fd0-bb89-054b92c7bbc5
 # ╠═4025de0e-cfa5-4586-b311-6c2272d5173c
-# ╠═121d17c8-a192-4478-a3a8-ff01a7f8cbb0
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
