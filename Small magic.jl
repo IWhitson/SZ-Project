@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 4025de0e-cfa5-4586-b311-6c2272d5173c
-using LsqFit, CSV, DataFrames, PlutoUI, Plots,PlutoTeachingTools, NPZ, LaTeXStrings, Statistics, LinearAlgebra
+using LsqFit, CSV, DataFrames, PlutoUI, Plots,PlutoTeachingTools, NPZ, LaTeXStrings, Statistics, LinearAlgebra, DelimitedFiles
 
 # ╔═╡ 456f552a-99d8-48e2-93cc-153501bf00fc
 begin
@@ -28,7 +28,17 @@ begin
 end
 
 # ╔═╡ 41b70e7f-ad52-4383-810c-54b2fcd9a8a4
-
+# ╠═╡ disabled = true
+#=╠═╡
+Compton y parameter and a temp, what is the SZ signal in each band
+SZsig=np.zeros((nband))
+nrSZsig=np.zeros_like(SZsig)
+for i, b in enumerate(band_inds):
+  SZsig[i]=polynomial(poly_pars[i,:], Te)*Tconv[i]*y
+  nrSZsig[i]=1./yconv[i]*Tconv[i]*y
+y parameter to find the signal then compare to the data to find the X^2
+	y_z s(i,y_t) to x^2
+  ╠═╡ =#
 
 # ╔═╡ 7dc741d5-1730-4277-9ab0-a6540d18e487
 # ╠═╡ disabled = true
@@ -84,55 +94,56 @@ begin
 end
   ╠═╡ =#
 
-# ╔═╡ 5004ae21-8b30-4673-bc68-a7f0536a32e5
+# ╔═╡ 182c99b8-4a60-4c57-abe3-c7ad5e8da857
 begin
-	# --- Non-Relativistic tSZ (Kompaneets) ---
-	# Load Data
-	x_data = CSV.read("nu_eff.txt", DataFrame)[:, 1]
-	y_data = NPZ.npzread("Te_10.0_Yrel.npy")
-	N = min(length(x_data), length(y_data))
-	x_data = x_data[1:N]
-	y_data = y_data[1:N]
-	y_err = fill(0.1, N)
-	
-	# Linear Fit
-	gradient_range = -0.1:0.001:0.1
-	intercept_range = -5:0.1:5
-	chi_matrix = zeros(length(intercept_range), length(gradient_range))
-	for (i, b) in enumerate(intercept_range)
-	    for (j, a) in enumerate(gradient_range)
-	        expected = a .* x_data .+ b
-	        chi2 = sum(((y_data .- expected) ./ y_err).^2)
-	        chi_matrix[i, j] = chi2
-	    end
-	end
-	min_val, min_idx = findmin(chi_matrix)
-	best_gradient = gradient_range[min_idx[2]]
-	best_intercept = intercept_range[min_idx[1]]
-	println("Non-relativistic tSZ Linear Fit:")
-	println("Minimum χ²: ", min_val)
-	println("Best Gradient (a): ", best_gradient)
-	println("Best Intercept (b): ", best_intercept)
-	
-	# Non-relativistic tSZ Model (Kompaneets)
-	function tSZ_nonrel(x, p)
-	    amplitude = p[1]
-	    g_x = x .* (exp.(x) .+ 1) ./ (exp.(x) .- 1) .- 4
-	    return amplitude .* g_x
-	end
-	
-	p0_nr = [1.0]
-	fit_nr = curve_fit(tSZ_nonrel, x_data, y_data, p0_nr)
-	best_p_nr = fit_nr.param
-	chi2_nr = sum(((y_data .- tSZ_nonrel(x_data, best_p_nr)) ./ y_err).^2)
-	println("\nNon-relativistic tSZ Non-linear Fit:")
-	println("Best amplitude: ", best_p_nr)
-	println("Minimum χ²: ", chi2_nr)
-	
-	# Plot
-	scatter(x_data, y_data; yerr=y_err, label="Data", xlabel="Frequency", ylabel="SZ Signal", title="Non-relativistic tSZ Data and Fits")
-	plot!(x_data, best_gradient .* x_data .+ best_intercept; label="Linear Fit", lw=2, color=:blue)
-	plot!(x_data, tSZ_nonrel(x_data, best_p_nr); label="Non-relativistic tSZ Fit", lw=2, color=:green)
+    # Helper: parse only numeric lines
+    function load_numeric_matrix(filename)
+        lines = readlines(filename)
+        data = []
+        for line in lines
+            if isempty(line) || startswith(strip(line), "#")
+                continue
+            end
+            push!(data, [parse(Float64, x) for x in split(strip(line), r"[,\s]+")])
+        end
+        return reduce(vcat, [reshape(row, 1, :) for row in data])
+    end
+
+    # --- Load conversion tables ---
+    poly_pars = load_numeric_matrix("YrSZ2KCMB_polyfits.txt")
+    Tconv = load_numeric_matrix("KCMB2MJysr.txt")[:, 1]
+    yconv = load_numeric_matrix("KCMB2YSZ.txt")[:, 1]
+
+    # --- Load band definitions and error bars ---
+    bands = load_numeric_matrix("sensitivity_calculations.txt")
+    band_inds = bands[:, 1]
+    band_errs = bands[:, 6]  # sensitivity column for error bars
+    nband = length(band_inds)
+
+    # --- Set Compton y and electron temperature ---
+    y = 1e-4           # Compton y parameter
+    Te = 10.0          # Electron temperature in keV
+
+    # --- Polynomial function for relativistic SZ ---
+    function polynomial(coeffs, Te)
+        sum(coeffs .* [Te^i for i in 0:(length(coeffs)-1)])
+    end
+
+    # --- Calculate SZ signal in each band ---
+    SZsig = zeros(nband)
+    nrSZsig = zeros(nband)
+    for i in 1:nband
+        SZsig[i] = polynomial(poly_pars[i, :], Te) * Tconv[i] * y
+        nrSZsig[i] = 1.0 / yconv[i] * Tconv[i] * y
+    end
+
+    println("Relativistic SZ signal in each band: ", SZsig)
+    println("Non-relativistic SZ signal in each band: ", nrSZsig)
+    println("Band errors (from sensitivity column): ", band_errs)
+
+    # --- Plot with error bars ---
+    plot(band_inds, SZsig; yerr=band_errs, label="Relativistic SZ", lw=2, marker=:circle, xlabel="Band Index", ylabel="SZ Signal [mJy/beam]", title="SZ Signal in Each Band")
+    plot!(band_inds, nrSZsig; label="Non-relativistic SZ", lw=2, marker=:diamond)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -140,6 +151,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LsqFit = "2fda8390-95c7-5789-9bda-21331edee243"
@@ -166,7 +178,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.6"
 manifest_format = "2.0"
-project_hash = "55e44ec4106a63340bdb7a38e39564ae406247b9"
+project_hash = "4c378488352b9f0f1d548ef9bd98724355006e5a"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "7927b9af540ee964cc5d1b73293f1eb0b761a3a1"
@@ -1779,7 +1791,7 @@ version = "1.9.2+0"
 # ╟─afa9be39-1e55-4582-81db-7757beb1c497
 # ╠═41b70e7f-ad52-4383-810c-54b2fcd9a8a4
 # ╟─7dc741d5-1730-4277-9ab0-a6540d18e487
-# ╠═5004ae21-8b30-4673-bc68-a7f0536a32e5
+# ╠═182c99b8-4a60-4c57-abe3-c7ad5e8da857
 # ╠═4025de0e-cfa5-4586-b311-6c2272d5173c
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
