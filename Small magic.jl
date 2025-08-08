@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 4025de0e-cfa5-4586-b311-6c2272d5173c
-using LsqFit, CSV, DataFrames, PlutoUI, Plots,PlutoTeachingTools, NPZ, LaTeXStrings, Statistics, LinearAlgebra, DelimitedFiles
+using LsqFit, CSV, DataFrames, PlutoUI, Plots,PlutoTeachingTools, NPZ, LaTeXStrings, Statistics, LinearAlgebra, DelimitedFiles, Optim
 
 # ╔═╡ 456f552a-99d8-48e2-93cc-153501bf00fc
 begin
@@ -26,19 +26,6 @@ begin
 	The observed change in intensity (ignoring amplitude and units) is: $\Delta I(x) \propto g(x)$
 	"""
 end
-
-# ╔═╡ 41b70e7f-ad52-4383-810c-54b2fcd9a8a4
-# ╠═╡ disabled = true
-#=╠═╡
-Compton y parameter and a temp, what is the SZ signal in each band
-SZsig=np.zeros((nband))
-nrSZsig=np.zeros_like(SZsig)
-for i, b in enumerate(band_inds):
-  SZsig[i]=polynomial(poly_pars[i,:], Te)*Tconv[i]*y
-  nrSZsig[i]=1./yconv[i]*Tconv[i]*y
-y parameter to find the signal then compare to the data to find the X^2
-	y_z s(i,y_t) to x^2
-  ╠═╡ =#
 
 # ╔═╡ 7dc741d5-1730-4277-9ab0-a6540d18e487
 # ╠═╡ disabled = true
@@ -146,6 +133,105 @@ begin
     plot!(band_inds, nrSZsig; label="Non-relativistic SZ", lw=2, marker=:diamond)
 end
 
+# ╔═╡ 961ad05c-817f-4d16-a5f7-4b32168357e0
+begin
+	data = NPZ.npzread("Te_10.0_Yrel.npy")
+	println(data)
+end
+
+# ╔═╡ 4e525323-1d01-4d30-863e-997cf54e0b56
+begin
+    # Assume: poly_pars, Tconv, yconv, band_inds, Te, polynomial() are already loaded
+
+    # Function for expected non-relativistic SZ signal in each band
+    function expected_nrSZ(y)
+        [1.0 / yconv[i] * Tconv[i] * y for i in 1:length(band_inds)]
+    end
+
+    # "Regular" non-relativistic SZ signal (example: use y = 1e-4)
+    y_val_nr = 1e-4
+    nrSZ = expected_nrSZ(y_val_nr)
+
+    # "Expected" non-relativistic SZ signal (example: use y = 2e-4)
+    y_expected_nr = 2e-4
+    nrSZ_expected = expected_nrSZ(y_expected_nr)
+
+    # Plot both on the same graph
+    plot(band_inds, nrSZ; label="Non-relativistic SZ (y = $y_val_nr)", lw=2, marker=:diamond, xlabel="Band Index", ylabel="SZ Signal", title="Non-relativistic SZ Signal")
+    plot!(band_inds, nrSZ_expected; label="Expected Non-relativistic SZ (y = $y_expected_nr)", lw=2, marker=:circle)
+end
+
+# ╔═╡ de708de5-acaa-4107-b303-ae5ad3943797
+begin
+    # Assume: poly_pars, Tconv, band_inds, Te, polynomial() are already loaded
+
+    # Function for expected relativistic SZ signal in each band
+    function expected_relSZ(y)
+        [polynomial(poly_pars[i, :], Te) * Tconv[i] * y for i in 1:length(band_inds)]
+    end
+
+    # "Regular" relativistic SZ signal (example: use y = 1e-4)
+    y_val_rel = 1e-4
+    relSZ = expected_relSZ(y_val)
+
+    # "Expected" relativistic SZ signal (example: use y = 2e-4)
+    y_expected_rel = 2e-4
+    relSZ_expected = expected_relSZ(y_expected)
+
+    # Plot both on the same graph
+    plot(band_inds, relSZ; label="Relativistic SZ (y = $y_val_rel)", lw=2, marker=:diamond, xlabel="Band Index", ylabel="SZ Signal", title="Relativistic SZ Signal")
+    plot!(band_inds, relSZ_expected; label="Expected Relativistic SZ (y = $y_expected_rel)", lw=2, marker=:circle)
+end
+
+# ╔═╡ 8ac65c84-30a4-4559-8285-d71bc1891ba1
+begin
+	y_data = NPZ.npzread("Te_10.0_Yrel.npy")
+	N = length(band_inds)
+	y_data = y_data[1:N]
+	
+	function chi2_nr(y)
+	    expected = expected_nrSZ(y)
+	    sum(((y_data .- expected) ./ band_errs).^2)
+	end
+	
+	result = optimize(chi2_nr, 1e-6, 1e-3)  # Adjust bounds as needed
+	best_y = Optim.minimizer(result)
+	min_chi2 = Optim.minimum(result)
+	
+	println("Best-fit y: ", best_y)
+	println("Minimum χ²: ", min_chi2)
+	expected_best = expected_nrSZ(best_y)
+scatter(band_inds, y_data; yerr=band_errs, label="Observed Data", xlabel="Band Index", ylabel="SZ Signal", title="Best-fit Non-relativistic SZ")
+plot!(band_inds, expected_best; label="Best-fit Model", lw=2)
+end
+
+# ╔═╡ 8eda4fc8-590f-48af-a6f7-b58204ec3087
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+    # Assume: band_inds, y_data, band_errs, Tconv, poly_pars, Te are already loaded
+
+    # Relativistic SZ model for a given y
+    function chi2_rel(y)
+        expected = [polynomial(poly_pars[i, :], Te) * Tconv[i] * y for i in 1:length(band_inds)]
+        return sum(((y_data .- expected) ./ band_errs).^2)
+    end
+
+    # Minimize chi2_rel with respect to y
+    result_rel = optimize(chi2_rel, 1e-6, 1e-3)  # Adjust bounds as needed
+    best_y_rel = Optim.minimizer(result_rel)
+    min_chi2_rel = Optim.minimum(result_rel)
+
+    println("Best-fit y (relativistic): ", best_y_rel)
+    println("Minimum χ²: ", min_chi2_rel)
+
+    # Plot best-fit model vs data
+    expected_best_rel = [polynomial(poly_pars[i, :], Te) * Tconv[i] * best_y_rel for i in 1:length(band_inds)]
+    scatter(band_inds, y_data; yerr=band_errs, label="Observed Data", xlabel="Band Index", ylabel="SZ Signal [mJy/beam]", title="Relativistic SZ Best Fit")
+    plot!(band_inds, expected_best_rel; label="Best-fit Relativistic SZ", lw=2)
+end
+  ╠═╡ =#
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -156,6 +242,7 @@ LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LsqFit = "2fda8390-95c7-5789-9bda-21331edee243"
 NPZ = "15e1cf62-19b3-5cfa-8e77-841668bca605"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoTeachingTools = "661c6b06-c737-4d37-b85c-46df65de6f69"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
@@ -167,6 +254,7 @@ DataFrames = "~1.7.0"
 LaTeXStrings = "~1.4.0"
 LsqFit = "~0.15.1"
 NPZ = "~0.4.3"
+Optim = "~1.10.0"
 Plots = "~1.40.17"
 PlutoTeachingTools = "~0.3.1"
 PlutoUI = "~0.7.68"
@@ -178,7 +266,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.6"
 manifest_format = "2.0"
-project_hash = "4c378488352b9f0f1d548ef9bd98724355006e5a"
+project_hash = "dcf7d8ad180d6f4bbbf602d6e55ceff3a4070137"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "7927b9af540ee964cc5d1b73293f1eb0b761a3a1"
@@ -900,6 +988,12 @@ git-tree-sha1 = "321ccef73a96ba828cd51f2ab5b9f917fa73945a"
 uuid = "38a345b3-de98-5d2b-a5d3-14cd9215e700"
 version = "2.41.0+0"
 
+[[deps.LineSearches]]
+deps = ["LinearAlgebra", "NLSolversBase", "NaNMath", "Parameters", "Printf"]
+git-tree-sha1 = "4adee99b7262ad2a1a4bbbc59d993d24e55ea96f"
+uuid = "d3d80556-e9d4-5f37-9878-2ab0fcc64255"
+version = "7.4.0"
+
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -1044,6 +1138,18 @@ git-tree-sha1 = "1346c9208249809840c91b26703912dff463d335"
 uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
 version = "0.5.6+0"
 
+[[deps.Optim]]
+deps = ["Compat", "FillArrays", "ForwardDiff", "LineSearches", "LinearAlgebra", "NLSolversBase", "NaNMath", "Parameters", "PositiveFactorizations", "Printf", "SparseArrays", "StatsBase"]
+git-tree-sha1 = "ab7edad78cdef22099f43c54ef77ac63c2c9cc64"
+uuid = "429524aa-4258-5aef-a3af-852621145aeb"
+version = "1.10.0"
+
+    [deps.Optim.extensions]
+    OptimMOIExt = "MathOptInterface"
+
+    [deps.Optim.weakdeps]
+    MathOptInterface = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
+
 [[deps.Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "c392fc5dd032381919e3b22dd32d6443760ce7ea"
@@ -1071,6 +1177,12 @@ deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "FriBidi_jl
 git-tree-sha1 = "275a9a6d85dc86c24d03d1837a0010226a96f540"
 uuid = "36c8627f-9965-5494-a995-c6b170f724f3"
 version = "1.56.3+0"
+
+[[deps.Parameters]]
+deps = ["OrderedCollections", "UnPack"]
+git-tree-sha1 = "34c0e9ad262e5f7fc75b10a9952ca7692cfc5fbe"
+uuid = "d96e819e-fc66-5662-9728-84c9c7592b0a"
+version = "0.12.3"
 
 [[deps.Parsers]]
 deps = ["Dates", "PrecompileTools", "UUIDs"]
@@ -1154,6 +1266,12 @@ deps = ["DataAPI", "Future"]
 git-tree-sha1 = "36d8b4b899628fb92c2749eb488d884a926614d3"
 uuid = "2dfb63ee-cc39-5dd5-95bd-886bf059d720"
 version = "1.4.3"
+
+[[deps.PositiveFactorizations]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "17275485f373e6673f7e7f97051f703ed5b15b20"
+uuid = "85a6dd25-e78a-55b7-8502-1745935b8125"
+version = "0.2.4"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
@@ -1462,6 +1580,11 @@ version = "1.6.1"
 deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 version = "1.11.0"
+
+[[deps.UnPack]]
+git-tree-sha1 = "387c1f73762231e86e0c9c5443ce3b4a0a9a0c2b"
+uuid = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
+version = "1.0.2"
 
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
@@ -1789,9 +1912,13 @@ version = "1.9.2+0"
 # ╔═╡ Cell order:
 # ╟─456f552a-99d8-48e2-93cc-153501bf00fc
 # ╟─afa9be39-1e55-4582-81db-7757beb1c497
-# ╠═41b70e7f-ad52-4383-810c-54b2fcd9a8a4
 # ╟─7dc741d5-1730-4277-9ab0-a6540d18e487
 # ╠═182c99b8-4a60-4c57-abe3-c7ad5e8da857
+# ╟─8eda4fc8-590f-48af-a6f7-b58204ec3087
+# ╟─961ad05c-817f-4d16-a5f7-4b32168357e0
+# ╠═4e525323-1d01-4d30-863e-997cf54e0b56
+# ╠═de708de5-acaa-4107-b303-ae5ad3943797
+# ╠═8ac65c84-30a4-4559-8285-d71bc1891ba1
 # ╠═4025de0e-cfa5-4586-b311-6c2272d5173c
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
