@@ -133,78 +133,6 @@ begin
     plot!(band_inds, nrSZsig; label="Non-relativistic SZ", lw=2, marker=:diamond)
 end
 
-# ╔═╡ 961ad05c-817f-4d16-a5f7-4b32168357e0
-begin
-	data = NPZ.npzread("Te_10.0_Yrel.npy")
-	println(data)
-end
-
-# ╔═╡ 4e525323-1d01-4d30-863e-997cf54e0b56
-begin
-    # Assume: poly_pars, Tconv, yconv, band_inds, Te, polynomial() are already loaded
-
-    # Function for expected non-relativistic SZ signal in each band
-    function expected_nrSZ(y)
-        [1.0 / yconv[i] * Tconv[i] * y for i in 1:length(band_inds)]
-    end
-
-    # "Regular" non-relativistic SZ signal (example: use y = 1e-4)
-    y_val_nr = 1e-4
-    nrSZ = expected_nrSZ(y_val_nr)
-
-    # "Expected" non-relativistic SZ signal (example: use y = 2e-4)
-    y_expected_nr = 2e-4
-    nrSZ_expected = expected_nrSZ(y_expected_nr)
-
-    # Plot both on the same graph
-    plot(band_inds, nrSZ; label="Non-relativistic SZ (y = $y_val_nr)", lw=2, marker=:diamond, xlabel="Band Index", ylabel="SZ Signal", title="Non-relativistic SZ Signal")
-    plot!(band_inds, nrSZ_expected; label="Expected Non-relativistic SZ (y = $y_expected_nr)", lw=2, marker=:circle)
-end
-
-# ╔═╡ de708de5-acaa-4107-b303-ae5ad3943797
-begin
-    # Assume: poly_pars, Tconv, band_inds, Te, polynomial() are already loaded
-
-    # Function for expected relativistic SZ signal in each band
-    function expected_relSZ(y)
-        [polynomial(poly_pars[i, :], Te) * Tconv[i] * y for i in 1:length(band_inds)]
-    end
-
-    # "Regular" relativistic SZ signal (example: use y = 1e-4)
-    y_val_rel = 1e-4
-    relSZ = expected_relSZ(y_val)
-
-    # "Expected" relativistic SZ signal (example: use y = 2e-4)
-    y_expected_rel = 2e-4
-    relSZ_expected = expected_relSZ(y_expected)
-
-    # Plot both on the same graph
-    plot(band_inds, relSZ; label="Relativistic SZ (y = $y_val_rel)", lw=2, marker=:diamond, xlabel="Band Index", ylabel="SZ Signal", title="Relativistic SZ Signal")
-    plot!(band_inds, relSZ_expected; label="Expected Relativistic SZ (y = $y_expected_rel)", lw=2, marker=:circle)
-end
-
-# ╔═╡ 8ac65c84-30a4-4559-8285-d71bc1891ba1
-begin
-	y_data = NPZ.npzread("Te_10.0_Yrel.npy")
-	N = length(band_inds)
-	y_data = y_data[1:N]
-	
-	function chi2_nr(y)
-	    expected = expected_nrSZ(y)
-	    sum(((y_data .- expected) ./ band_errs).^2)
-	end
-	
-	result = optimize(chi2_nr, 1e-6, 1e-3)  # Adjust bounds as needed
-	best_y = Optim.minimizer(result)
-	min_chi2 = Optim.minimum(result)
-	
-	println("Best-fit y: ", best_y)
-	println("Minimum χ²: ", min_chi2)
-	expected_best = expected_nrSZ(best_y)
-scatter(band_inds, y_data; yerr=band_errs, label="Observed Data", xlabel="Band Index", ylabel="SZ Signal", title="Best-fit Non-relativistic SZ")
-plot!(band_inds, expected_best; label="Best-fit Model", lw=2)
-end
-
 # ╔═╡ 8eda4fc8-590f-48af-a6f7-b58204ec3087
 # ╠═╡ disabled = true
 #=╠═╡
@@ -231,6 +159,58 @@ begin
     plot!(band_inds, expected_best_rel; label="Best-fit Relativistic SZ", lw=2)
 end
   ╠═╡ =#
+
+# ╔═╡ 961ad05c-817f-4d16-a5f7-4b32168357e0
+begin
+	data = NPZ.npzread("Te_10.0_Yrel.npy")
+	println(data)
+end
+
+# ╔═╡ 025810ed-c5db-44fb-a95a-2693571df0fb
+begin
+    # --- Functions for expected SZ signals ---
+    function expected_nrSZ(y)
+        [1.0 / yconv[i] * Tconv[i] * y for i in 1:length(band_inds)]
+    end
+    function expected_relSZ(y)
+        [polynomial(poly_pars[i, :], Te) * Tconv[i] * y for i in 1:length(band_inds)]
+    end
+
+    # --- Helper to load a 9-element vector from a text file ---
+    function load_vector(filename)
+        lines = readlines(filename)
+        data = []
+        for line in lines
+            if isempty(line) || startswith(strip(line), "#")
+                continue
+            end
+            for x in split(strip(line), r"[,\s]+")
+                push!(data, parse(Float64, x))
+            end
+        end
+        return data
+    end
+
+    # --- Load observed data from KCMB2YSZ.txt ---
+    obs_KCMB2YSZ = load_vector("KCMB2YSZ.txt")
+
+    # --- Calculate expected values for y = 2e-4 ---
+    y_expected = 2e-4
+    nrSZ_expected = expected_nrSZ(y_expected)
+    relSZ_expected = expected_relSZ(y_expected)
+
+    # --- Chi^2 calculation ---
+    function chi2(observed, expected, errors)
+        sum(((observed .- expected) ./ errors).^2)
+    end
+    DOF = 5  # 9 bands - 4 parameters
+
+    chi2_non = chi2(obs_KCMB2YSZ, nrSZ_expected, band_errs)
+    chi2_rel = chi2(obs_KCMB2YSZ, relSZ_expected, band_errs)
+
+    println("Non-relativistic: χ² = ", chi2_non, ", χ²/DOF = ", chi2_non / DOF)
+    println("Relativistic: χ² = ", chi2_rel, ", χ²/DOF = ", chi2_rel / DOF)
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1913,12 +1893,10 @@ version = "1.9.2+0"
 # ╟─456f552a-99d8-48e2-93cc-153501bf00fc
 # ╟─afa9be39-1e55-4582-81db-7757beb1c497
 # ╟─7dc741d5-1730-4277-9ab0-a6540d18e487
-# ╠═182c99b8-4a60-4c57-abe3-c7ad5e8da857
+# ╟─182c99b8-4a60-4c57-abe3-c7ad5e8da857
 # ╟─8eda4fc8-590f-48af-a6f7-b58204ec3087
 # ╟─961ad05c-817f-4d16-a5f7-4b32168357e0
-# ╠═4e525323-1d01-4d30-863e-997cf54e0b56
-# ╠═de708de5-acaa-4107-b303-ae5ad3943797
-# ╠═8ac65c84-30a4-4559-8285-d71bc1891ba1
+# ╟─025810ed-c5db-44fb-a95a-2693571df0fb
 # ╠═4025de0e-cfa5-4586-b311-6c2272d5173c
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
