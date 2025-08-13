@@ -133,45 +133,13 @@ begin
     plot!(band_inds, nrSZsig; label="Non-relativistic SZ", lw=2, marker=:diamond)
 end
 
-# ╔═╡ 8eda4fc8-590f-48af-a6f7-b58204ec3087
-# ╠═╡ disabled = true
-#=╠═╡
-begin
-    # Assume: band_inds, y_data, band_errs, Tconv, poly_pars, Te are already loaded
-
-    # Relativistic SZ model for a given y
-    function chi2_rel(y)
-        expected = [polynomial(poly_pars[i, :], Te) * Tconv[i] * y for i in 1:length(band_inds)]
-        return sum(((y_data .- expected) ./ band_errs).^2)
-    end
-
-    # Minimize chi2_rel with respect to y
-    result_rel = optimize(chi2_rel, 1e-6, 1e-3)  # Adjust bounds as needed
-    best_y_rel = Optim.minimizer(result_rel)
-    min_chi2_rel = Optim.minimum(result_rel)
-
-    println("Best-fit y (relativistic): ", best_y_rel)
-    println("Minimum χ²: ", min_chi2_rel)
-
-    # Plot best-fit model vs data
-    expected_best_rel = [polynomial(poly_pars[i, :], Te) * Tconv[i] * best_y_rel for i in 1:length(band_inds)]
-    scatter(band_inds, y_data; yerr=band_errs, label="Observed Data", xlabel="Band Index", ylabel="SZ Signal [mJy/beam]", title="Relativistic SZ Best Fit")
-    plot!(band_inds, expected_best_rel; label="Best-fit Relativistic SZ", lw=2)
-end
-  ╠═╡ =#
-
-# ╔═╡ 961ad05c-817f-4d16-a5f7-4b32168357e0
-begin
-	data = NPZ.npzread("Te_10.0_Yrel.npy")
-	println(data)
-end
-
-# ╔═╡ 025810ed-c5db-44fb-a95a-2693571df0fb
+# ╔═╡ 7453cfe8-1080-4461-92de-7e2a38adb112
 begin
     # --- Functions for expected SZ signals ---
     function expected_nrSZ(y)
         [1.0 / yconv[i] * Tconv[i] * y for i in 1:length(band_inds)]
     end
+
     function expected_relSZ(y)
         [polynomial(poly_pars[i, :], Te) * Tconv[i] * y for i in 1:length(band_inds)]
     end
@@ -179,7 +147,7 @@ begin
     # --- Helper to load a 9-element vector from a text file ---
     function load_vector(filename)
         lines = readlines(filename)
-        data = []
+        data = Float64[]
         for line in lines
             if isempty(line) || startswith(strip(line), "#")
                 continue
@@ -191,25 +159,55 @@ begin
         return data
     end
 
-    # --- Load observed data from KCMB2YSZ.txt ---
+    # --- Load observed data ---
     obs_KCMB2YSZ = load_vector("KCMB2YSZ.txt")
 
-    # --- Calculate expected values for y = 2e-4 ---
-    y_expected = 2e-4
-    nrSZ_expected = expected_nrSZ(y_expected)
-    relSZ_expected = expected_relSZ(y_expected)
-
-    # --- Chi^2 calculation ---
+    # --- Chi² function ---
     function chi2(observed, expected, errors)
         sum(((observed .- expected) ./ errors).^2)
     end
-    DOF = 5  # 9 bands - 4 parameters
 
-    chi2_non = chi2(obs_KCMB2YSZ, nrSZ_expected, band_errs)
-    chi2_rel = chi2(obs_KCMB2YSZ, relSZ_expected, band_errs)
+    # --- Manual χ² for y = 2e-4 ---
+    y_expected = 2e-4
+    nrSZ_expected = expected_nrSZ(y_expected)
+    relSZ_expected = expected_relSZ(y_expected)
+    chi2_non_manual = chi2(obs_KCMB2YSZ, nrSZ_expected, band_errs)
+    chi2_rel_manual = chi2(obs_KCMB2YSZ, relSZ_expected, band_errs)
 
-    println("Non-relativistic: χ² = ", chi2_non, ", χ²/DOF = ", chi2_non / DOF)
-    println("Relativistic: χ² = ", chi2_rel, ", χ²/DOF = ", chi2_rel / DOF)
+    # --- Minimization χ² ---
+    function chi2_model(y, expected_func)
+        expected = expected_func(y)
+        sum(((obs_KCMB2YSZ .- expected) ./ band_errs).^2)
+    end
+
+    result_non = optimize(y -> chi2_model(y, expected_nrSZ), 1e-6, 1e-3)
+    best_y_non = Optim.minimizer(result_non)
+    min_chi2_non = Optim.minimum(result_non)
+
+    result_rel = optimize(y -> chi2_model(y, expected_relSZ), 1e-6, 1e-3)
+    best_y_rel = Optim.minimizer(result_rel)
+    min_chi2_rel = Optim.minimum(result_rel)
+
+    # --- Degrees of freedom ---
+    DOF_manual = 5  # 9 bands - 4 parameters (manual model)
+    DOF_min = 8     # 9 bands - 1 parameter (minimization)
+
+    # --- Print results ---
+    println("Manual y = ", y_expected)
+    println("Non-relativistic manual χ² = ", chi2_non_manual, ", χ²/DOF = ", chi2_non_manual / DOF_manual)
+    println("Relativistic manual χ² = ", chi2_rel_manual, ", χ²/DOF = ", chi2_rel_manual / DOF_manual)
+    println()
+    println("Minimized non-relativistic best-fit y = ", best_y_non)
+    println("Minimized non-relativistic χ² = ", min_chi2_non, ", χ²/DOF = ", min_chi2_non / DOF_min)
+    println("Minimized relativistic best-fit y = ", best_y_rel)
+    println("Minimized relativistic χ² = ", min_chi2_rel, ", χ²/DOF = ", min_chi2_rel / DOF_min)
+end
+
+
+# ╔═╡ 961ad05c-817f-4d16-a5f7-4b32168357e0
+begin
+	data = NPZ.npzread("Te_10.0_Yrel.npy")
+	println(data)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -1894,9 +1892,8 @@ version = "1.9.2+0"
 # ╟─afa9be39-1e55-4582-81db-7757beb1c497
 # ╟─7dc741d5-1730-4277-9ab0-a6540d18e487
 # ╟─182c99b8-4a60-4c57-abe3-c7ad5e8da857
-# ╟─8eda4fc8-590f-48af-a6f7-b58204ec3087
-# ╟─961ad05c-817f-4d16-a5f7-4b32168357e0
-# ╟─025810ed-c5db-44fb-a95a-2693571df0fb
+# ╟─7453cfe8-1080-4461-92de-7e2a38adb112
 # ╠═4025de0e-cfa5-4586-b311-6c2272d5173c
+# ╟─961ad05c-817f-4d16-a5f7-4b32168357e0
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
