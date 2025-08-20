@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 4025de0e-cfa5-4586-b311-6c2272d5173c
-using LsqFit, CSV, DataFrames, PlutoUI, Plots,PlutoTeachingTools, NPZ, LaTeXStrings, Statistics, LinearAlgebra, DelimitedFiles, Optim
+using LsqFit, CSV, DataFrames, PlutoUI, Plots,PlutoTeachingTools, NPZ, LaTeXStrings, Statistics, LinearAlgebra, DelimitedFiles, Optim, Distributions, Printf
 
 # ╔═╡ 456f552a-99d8-48e2-93cc-153501bf00fc
 begin
@@ -127,10 +127,13 @@ begin
     println("Relativistic SZ signal in each band: ", SZsig)
     println("Non-relativistic SZ signal in each band: ", nrSZsig)
     println("Band errors (from sensitivity column): ", band_errs)
+	println(yconv)
+	println(Tconv)
 
     # --- Plot with error bars ---
     plot(band_inds, SZsig; yerr=band_errs, label="Relativistic SZ", lw=2, marker=:circle, xlabel="Band Index", ylabel="SZ Signal [mJy/beam]", title="SZ Signal in Each Band")
     plot!(band_inds, nrSZsig; label="Non-relativistic SZ", lw=2, marker=:diamond)
+	
 end
 
 # ╔═╡ 7453cfe8-1080-4461-92de-7e2a38adb112
@@ -164,7 +167,7 @@ begin
 
     # --- Chi² function ---
     function chi2(observed, expected, errors)
-        sum(((observed .- expected) ./ errors).^2)
+        sum(((observed .- expected).^2) ./ errors)
     end
 
     # --- Manual χ² for y = 2e-4 ---
@@ -177,7 +180,7 @@ begin
     # --- Minimization χ² ---
     function chi2_model(y, expected_func)
         expected = expected_func(y)
-        sum(((obs_KCMB2YSZ .- expected) ./ band_errs).^2)
+        sum(((obs_KCMB2YSZ .- expected).^2) ./ band_errs)
     end
 
     result_non = optimize(y -> chi2_model(y, expected_nrSZ), 1e-6, 1e-3)
@@ -201,6 +204,27 @@ begin
     println("Minimized non-relativistic χ² = ", min_chi2_non, ", χ²/DOF = ", min_chi2_non / DOF_min)
     println("Minimized relativistic best-fit y = ", best_y_rel)
     println("Minimized relativistic χ² = ", min_chi2_rel, ", χ²/DOF = ", min_chi2_rel / DOF_min)
+	println("Residuals (obs - expected): ", obs_KCMB2YSZ .- nrSZ_expected)
+	println("Normalized residuals: ", (obs_KCMB2YSZ .- nrSZ_expected) ./ band_errs)
+
+# Prepare vectors for table
+observed = obs_KCMB2YSZ
+expected = nrSZ_expected
+error_bars = band_errs
+residuals = observed .- expected
+normalized_residuals = residuals ./ error_bars
+
+# Print a table of observed, expected, error bars, residuals, and normalized residuals for each band
+println("\nBand | Observed | Expected | Error Bar | Residual | Normalized Residual")
+println("-----|----------|----------|-----------|----------|---------------------")
+for i in 1:length(observed)
+    println(rpad(string(i),5), "| ",
+        rpad(@sprintf("%.6f", observed[i]),9), "| ",
+        rpad(@sprintf("%.6f", expected[i]),9), "| ",
+        rpad(@sprintf("%.6f", error_bars[i]),10), "| ",
+        rpad(@sprintf("%.6f", residuals[i]),9), "| ",
+        @sprintf("%.6f", normalized_residuals[i]))
+end
 end
 
 
@@ -216,6 +240,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LsqFit = "2fda8390-95c7-5789-9bda-21331edee243"
@@ -224,11 +249,13 @@ Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoTeachingTools = "661c6b06-c737-4d37-b85c-46df65de6f69"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
 CSV = "~0.10.15"
 DataFrames = "~1.7.0"
+Distributions = "~0.25.120"
 LaTeXStrings = "~1.4.0"
 LsqFit = "~0.15.1"
 NPZ = "~0.4.3"
@@ -244,7 +271,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.6"
 manifest_format = "2.0"
-project_hash = "dcf7d8ad180d6f4bbbf602d6e55ceff3a4070137"
+project_hash = "baa63dd94026f236a7c49db932b3c1b9e8177395"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "7927b9af540ee964cc5d1b73293f1eb0b761a3a1"
@@ -1891,8 +1918,8 @@ version = "1.9.2+0"
 # ╟─456f552a-99d8-48e2-93cc-153501bf00fc
 # ╟─afa9be39-1e55-4582-81db-7757beb1c497
 # ╟─7dc741d5-1730-4277-9ab0-a6540d18e487
-# ╟─182c99b8-4a60-4c57-abe3-c7ad5e8da857
-# ╟─7453cfe8-1080-4461-92de-7e2a38adb112
+# ╠═182c99b8-4a60-4c57-abe3-c7ad5e8da857
+# ╠═7453cfe8-1080-4461-92de-7e2a38adb112
 # ╠═4025de0e-cfa5-4586-b311-6c2272d5173c
 # ╟─961ad05c-817f-4d16-a5f7-4b32168357e0
 # ╟─00000000-0000-0000-0000-000000000001
