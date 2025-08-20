@@ -137,96 +137,24 @@ begin
 end
 
 # ╔═╡ 7453cfe8-1080-4461-92de-7e2a38adb112
+# ╠═╡ disabled = true
+#=╠═╡
+
+  ╠═╡ =#
+
+# ╔═╡ ac0adc64-48fa-4bd4-ba42-255e7778cd2a
 begin
-    # --- Functions for expected SZ signals ---
-    function expected_nrSZ(y)
-        [1.0 / yconv[i] * Tconv[i] * y for i in 1:length(band_inds)]
-    end
-
-    function expected_relSZ(y)
-        [polynomial(poly_pars[i, :], Te) * Tconv[i] * y for i in 1:length(band_inds)]
-    end
-
-    # --- Helper to load a 9-element vector from a text file ---
-    function load_vector(filename)
-        lines = readlines(filename)
-        data = Float64[]
-        for line in lines
-            if isempty(line) || startswith(strip(line), "#")
-                continue
-            end
-            for x in split(strip(line), r"[,\s]+")
-                push!(data, parse(Float64, x))
-            end
-        end
-        return data
-    end
-
-    # --- Load observed data ---
-    obs_KCMB2YSZ = load_vector("KCMB2YSZ.txt")
-
-    # --- Chi² function ---
-    function chi2(observed, expected, errors)
-        sum(((observed .- expected).^2) ./ errors)
-    end
-
-    # --- Manual χ² for y = 2e-4 ---
-    y_expected = 2e-4
-    nrSZ_expected = expected_nrSZ(y_expected)
-    relSZ_expected = expected_relSZ(y_expected)
-    chi2_non_manual = chi2(obs_KCMB2YSZ, nrSZ_expected, band_errs)
-    chi2_rel_manual = chi2(obs_KCMB2YSZ, relSZ_expected, band_errs)
-
-    # --- Minimization χ² ---
-    function chi2_model(y, expected_func)
-        expected = expected_func(y)
-        sum(((obs_KCMB2YSZ .- expected).^2) ./ band_errs)
-    end
-
-    result_non = optimize(y -> chi2_model(y, expected_nrSZ), 1e-6, 1e-3)
-    best_y_non = Optim.minimizer(result_non)
-    min_chi2_non = Optim.minimum(result_non)
-
-    result_rel = optimize(y -> chi2_model(y, expected_relSZ), 1e-6, 1e-3)
-    best_y_rel = Optim.minimizer(result_rel)
-    min_chi2_rel = Optim.minimum(result_rel)
-
-    # --- Degrees of freedom ---
-    DOF_manual = 5  # 9 bands - 4 parameters (manual model)
-    DOF_min = 8     # 9 bands - 1 parameter (minimization)
-
-    # --- Print results ---
-    println("Manual y = ", y_expected)
-    println("Non-relativistic manual χ² = ", chi2_non_manual, ", χ²/DOF = ", chi2_non_manual / DOF_manual)
-    println("Relativistic manual χ² = ", chi2_rel_manual, ", χ²/DOF = ", chi2_rel_manual / DOF_manual)
-    println()
-    println("Minimized non-relativistic best-fit y = ", best_y_non)
-    println("Minimized non-relativistic χ² = ", min_chi2_non, ", χ²/DOF = ", min_chi2_non / DOF_min)
-    println("Minimized relativistic best-fit y = ", best_y_rel)
-    println("Minimized relativistic χ² = ", min_chi2_rel, ", χ²/DOF = ", min_chi2_rel / DOF_min)
-	println("Residuals (obs - expected): ", obs_KCMB2YSZ .- nrSZ_expected)
-	println("Normalized residuals: ", (obs_KCMB2YSZ .- nrSZ_expected) ./ band_errs)
-
-# Prepare vectors for table
-observed = obs_KCMB2YSZ
-expected = nrSZ_expected
-error_bars = band_errs
-residuals = observed .- expected
-normalized_residuals = residuals ./ error_bars
-
-# Print a table of observed, expected, error bars, residuals, and normalized residuals for each band
-println("\nBand | Observed | Expected | Error Bar | Residual | Normalized Residual")
-println("-----|----------|----------|-----------|----------|---------------------")
-for i in 1:length(observed)
-    println(rpad(string(i),5), "| ",
-        rpad(@sprintf("%.6f", observed[i]),9), "| ",
-        rpad(@sprintf("%.6f", expected[i]),9), "| ",
-        rpad(@sprintf("%.6f", error_bars[i]),10), "| ",
-        rpad(@sprintf("%.6f", residuals[i]),9), "| ",
-        @sprintf("%.6f", normalized_residuals[i]))
+	y_val = 2e-4  # or your best-fit y
+	
+	expected_tSZ = expected_nrSZ(y_val)
+	expected_rSZ = expected_relSZ(y_val)
+	
+	chi2_tSZ = chi2(obs_tSZ, expected_tSZ, err_tSZ)
+	chi2_rSZ = chi2(obs_rSZ, expected_rSZ, err_rSZ)
+	
+	println("Non-relativistic chi² (first band): ", chi2_tSZ)
+	println("Relativistic chi² (first band): ", chi2_rSZ)
 end
-end
-
 
 # ╔═╡ 961ad05c-817f-4d16-a5f7-4b32168357e0
 begin
@@ -1918,8 +1846,9 @@ version = "1.9.2+0"
 # ╟─456f552a-99d8-48e2-93cc-153501bf00fc
 # ╟─afa9be39-1e55-4582-81db-7757beb1c497
 # ╟─7dc741d5-1730-4277-9ab0-a6540d18e487
-# ╠═182c99b8-4a60-4c57-abe3-c7ad5e8da857
+# ╟─182c99b8-4a60-4c57-abe3-c7ad5e8da857
 # ╠═7453cfe8-1080-4461-92de-7e2a38adb112
+# ╠═ac0adc64-48fa-4bd4-ba42-255e7778cd2a
 # ╠═4025de0e-cfa5-4586-b311-6c2272d5173c
 # ╟─961ad05c-817f-4d16-a5f7-4b32168357e0
 # ╟─00000000-0000-0000-0000-000000000001
