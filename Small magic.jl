@@ -136,25 +136,88 @@ begin
 	
 end
 
-# ╔═╡ 7453cfe8-1080-4461-92de-7e2a38adb112
+# ╔═╡ a352f09c-e979-47e7-b6e2-52e23487eafd
+begin
+	# --- Compute chi² for non-relativistic and relativistic SZ using Te_10.0 files ---
+	
+	# Helper to load expected and error values from a two-column text file
+	function load_expected_and_error(filename)
+	    expected = Float64[]
+	    errors = Float64[]
+	    for line in eachline(filename)
+	        if isempty(line) || startswith(strip(line), "#")
+	            continue
+	        end
+	        vals = split(strip(line))
+	        push!(expected, parse(Float64, vals[1]))
+	        push!(errors, parse(Float64, vals[2]))
+	    end
+	    return expected, errors
+	end
+	
+	# Load expected and error values
+	nr_expected, nr_errors = load_expected_and_error("Te_10.0_tSZ_signal.txt")
+	rel_expected, rel_errors = load_expected_and_error("Te_10.0_rSZ_signal.txt")
+	
+	# Generate observed values using the non-relativistic SZ model with y = 2e-4
+	y_obs = 1.1e-4
+	observed = [1.0 / yconv[i] * Tconv[i] * y_obs for i in 1:length(band_inds)]
+	
+	# Chi-squared function
+	function chi2(observed, expected, errors)
+	    sum((((observed .- expected).^2) ./ errors.^2))
+	end
+	
+	# Compute chi²
+	chi2_nr = chi2(observed, nr_expected, nr_errors)
+	chi2_rel = chi2(observed, rel_expected, rel_errors)
+	
+	println("Chi² (Non-relativistic): ", chi2_nr)
+	println("Chi² (Relativistic): ", chi2_rel)
+	println(observed)
+	println(nr_expected)
+end
+
+# ╔═╡ 4cfb5053-3819-46fb-9bad-d7a16d37c4fb
 # ╠═╡ disabled = true
 #=╠═╡
-
-  ╠═╡ =#
-
-# ╔═╡ ac0adc64-48fa-4bd4-ba42-255e7778cd2a
 begin
-	y_val = 2e-4  # or your best-fit y
+	# Helper to load expected and error values from a two-column file
+	function load_expected_and_error(filename)
+	    expected, errors = Float64[], Float64[]
+	    for line in eachline(filename)
+	        if isempty(line) || startswith(strip(line), "#")
+	            continue
+	        end
+	        vals = split(strip(line))
+	        push!(expected, parse(Float64, vals[1]))
+	        push!(errors, parse(Float64, vals[2]))
+	    end
+	    return expected, errors
+	end
 	
-	expected_tSZ = expected_nrSZ(y_val)
-	expected_rSZ = expected_relSZ(y_val)
+	# Use SZsig as observed values
+	observed_rel = SZsig
+	observed_non = nrSZsig
 	
-	chi2_tSZ = chi2(obs_tSZ, expected_tSZ, err_tSZ)
-	chi2_rSZ = chi2(obs_rSZ, expected_rSZ, err_rSZ)
+	# Load model predictions and errors
+	nr_expected, nr_error = load_expected_and_error("Te_10.0_tSZ_signal.txt")
+	rel_expected, rel_error = load_expected_and_error("Te_10.0_rSZ_signal.txt")
 	
-	println("Non-relativistic chi² (first band): ", chi2_tSZ)
-	println("Relativistic chi² (first band): ", chi2_rSZ)
+	# Chi-squared function
+	function chi2(obs, expected, err)
+	    sum(((obs .- expected).^2) ./ err)
+	end
+	
+	chi2_nr = chi2(observed_non, nr_expected, nr_error)
+	chi2_rel = chi2(observed_rel, rel_expected, rel_error)
+	
+	println("Chi² (Non-relativistic model): ", chi2_nr)
+	println("Chi² (Relativistic model): ", chi2_rel)
+	println(nr_expected)
+	println(nr_error)
 end
+  ╠═╡ =#
 
 # ╔═╡ 961ad05c-817f-4d16-a5f7-4b32168357e0
 begin
@@ -1846,9 +1909,9 @@ version = "1.9.2+0"
 # ╟─456f552a-99d8-48e2-93cc-153501bf00fc
 # ╟─afa9be39-1e55-4582-81db-7757beb1c497
 # ╟─7dc741d5-1730-4277-9ab0-a6540d18e487
-# ╟─182c99b8-4a60-4c57-abe3-c7ad5e8da857
-# ╠═7453cfe8-1080-4461-92de-7e2a38adb112
-# ╠═ac0adc64-48fa-4bd4-ba42-255e7778cd2a
+# ╠═182c99b8-4a60-4c57-abe3-c7ad5e8da857
+# ╠═a352f09c-e979-47e7-b6e2-52e23487eafd
+# ╠═4cfb5053-3819-46fb-9bad-d7a16d37c4fb
 # ╠═4025de0e-cfa5-4586-b311-6c2272d5173c
 # ╟─961ad05c-817f-4d16-a5f7-4b32168357e0
 # ╟─00000000-0000-0000-0000-000000000001
