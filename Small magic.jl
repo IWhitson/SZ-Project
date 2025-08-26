@@ -174,55 +174,99 @@ begin
 	
 	println("Chi² (Non-relativistic): ", chi2_nr)
 	println("Chi² (Relativistic): ", chi2_rel)
-	println(observed)
-	println(nr_expected)
 end
 
-# ╔═╡ 4cfb5053-3819-46fb-9bad-d7a16d37c4fb
-# ╠═╡ disabled = true
-#=╠═╡
+# ╔═╡ 3babab2d-e59a-4a9e-8230-73ef775dd5d7
 begin
-	# Helper to load expected and error values from a two-column file
-	function load_expected_and_error(filename)
-	    expected, errors = Float64[], Float64[]
-	    for line in eachline(filename)
-	        if isempty(line) || startswith(strip(line), "#")
-	            continue
-	        end
-	        vals = split(strip(line))
-	        push!(expected, parse(Float64, vals[1]))
-	        push!(errors, parse(Float64, vals[2]))
-	    end
-	    return expected, errors
-	end
-	
-	# Use SZsig as observed values
-	observed_rel = SZsig
-	observed_non = nrSZsig
-	
-	# Load model predictions and errors
-	nr_expected, nr_error = load_expected_and_error("Te_10.0_tSZ_signal.txt")
-	rel_expected, rel_error = load_expected_and_error("Te_10.0_rSZ_signal.txt")
-	
-	# Chi-squared function
-	function chi2(obs, expected, err)
-	    sum(((obs .- expected).^2) ./ err)
-	end
-	
-	chi2_nr = chi2(observed_non, nr_expected, nr_error)
-	chi2_rel = chi2(observed_rel, rel_expected, rel_error)
-	
-	println("Chi² (Non-relativistic model): ", chi2_nr)
-	println("Chi² (Relativistic model): ", chi2_rel)
-	println(nr_expected)
-	println(nr_error)
-end
-  ╠═╡ =#
+	NR_DOF = 9 - 1
+	R_DOF = 9 - 2
+    # Function to generate expected SZ signal for a given y (non-relativistic)
+    function expected_nrSZ(y)
+        [1.0 / yconv[i] * Tconv[i] * y for i in 1:length(band_inds)]
+    end
 
-# ╔═╡ 961ad05c-817f-4d16-a5f7-4b32168357e0
-begin
-	data = NPZ.npzread("Te_10.0_Yrel.npy")
-	println(data)
+    # Function to generate expected SZ signal for a given y and Te (relativistic)
+    function expected_relSZ_2d(y, Te)
+        [polynomial(poly_pars[i, :], Te) * Tconv[i] * y for i in 1:length(band_inds)]
+    end
+
+    # Function to add Gaussian noise to model data
+    function add_noise_to_data(model_data, errorbars)
+        return model_data .+ randn(length(model_data)) .* errorbars
+    end
+
+    # --- Minimize WITHOUT noise ---
+    function chi2_model(y, expected_func, observed, errors)
+        model = expected_func(y)
+        sum(((model .- observed) ./ errors).^2)
+    end
+
+    result_nr = optimize(y -> chi2_model(y, expected_nrSZ, observed, nr_errors), 1e-6, 1e-3)
+    best_y_nr = Optim.minimizer(result_nr)
+    min_chi2_nr = Optim.minimum(result_nr)
+
+    function chi2_rel_2d(params, observed, errors)
+        y, Te = params
+        model = expected_relSZ_2d(y, Te)
+        sum(((model .- observed) ./ errors).^2)
+    end
+    initial_guess = [best_y_nr, 10.0]
+    lower = [1e-6, 1.0]
+    upper = [1e-3, 25.0]
+    result_rel = optimize(params -> chi2_rel_2d(params, rel_expected, rel_errors), lower, upper, initial_guess, Fminbox())
+    best_params_rel = Optim.minimizer(result_rel)
+    best_y_rel, best_Te_rel = best_params_rel
+    min_chi2_rel = Optim.minimum(result_rel)
+
+    println("=== Results WITHOUT noise ===")
+    println("Best-fit y (Non-relativistic): ", best_y_nr, ", min χ²: ", min_chi2_nr)
+    println("Best-fit y (Relativistic): ", best_y_rel, ", Best-fit Te: ", best_Te_rel, ", min χ²: ", min_chi2_rel)
+
+    # --- Minimize WITH noise (single realization) ---
+    observed_noisy = add_noise_to_data(observed, nr_errors)
+    rel_expected_noisy = add_noise_to_data(rel_expected, rel_errors)
+
+    result_nr_noisy = optimize(y -> chi2_model(y, expected_nrSZ, observed_noisy, nr_errors), 1e-6, 1e-3)
+    best_y_nr_noisy = Optim.minimizer(result_nr_noisy)
+    min_chi2_nr_noisy = Optim.minimum(result_nr_noisy)
+
+    result_rel_noisy = optimize(params -> chi2_rel_2d(params, rel_expected_noisy, rel_errors), lower, upper, [best_y_nr_noisy, 10.0], Fminbox())
+    best_params_rel_noisy = Optim.minimizer(result_rel_noisy)
+    best_y_rel_noisy, best_Te_rel_noisy = best_params_rel_noisy
+    min_chi2_rel_noisy = Optim.minimum(result_rel_noisy)
+
+    println("\n=== Results WITH noise (single itteration) ===")
+    println("Best-fit y (Non-relativistic): ", best_y_nr_noisy, ", min χ²: ", min_chi2_nr_noisy)
+    println("Best-fit y (Relativistic): ", best_y_rel_noisy, ", Best-fit Te: ", best_Te_rel_noisy, ", min χ²: ", min_chi2_rel_noisy)
+
+    # --- Run experiment 100 times and average ---
+    n_trials = 100
+    y_nr_vals = zeros(n_trials)
+    chi2_nr_vals = zeros(n_trials)
+    y_rel_vals = zeros(n_trials)
+    Te_rel_vals = zeros(n_trials)
+    chi2_rel_vals = zeros(n_trials)
+
+    for i in 1:n_trials
+        obs_noisy = add_noise_to_data(observed, nr_errors)
+        rel_noisy = add_noise_to_data(rel_expected, rel_errors)
+
+        res_nr = optimize(y -> chi2_model(y, expected_nrSZ, obs_noisy, nr_errors), 1e-6, 1e-3)
+        y_nr_vals[i] = Optim.minimizer(res_nr)
+        chi2_nr_vals[i] = Optim.minimum(res_nr)
+
+        res_rel = optimize(params -> chi2_rel_2d(params, rel_noisy, rel_errors), lower, upper, [y_nr_vals[i], 10.0], Fminbox())
+        best_params = Optim.minimizer(res_rel)
+        y_rel_vals[i], Te_rel_vals[i] = best_params
+        chi2_rel_vals[i] = Optim.minimum(res_rel)
+    end
+
+    println("\n=== AVERAGE over $n_trials noise itterations ===")
+    println("Non-relativistic: <y> = ", mean(y_nr_vals), ", <χ²> = ", mean(chi2_nr_vals))
+    println("Relativistic: <y> = ", mean(y_rel_vals), ", <Te> = ", mean(Te_rel_vals), ", <χ²> = ", mean(chi2_rel_vals))
+	println("\n=== AVERAGE over 100 noise itterations w. DOF ===")
+	println("Non-relativistic: <y> = ", "<χ²> = ", (mean(chi2_nr_vals))/(NR_DOF))
+	println("Relativistic: <y> = ", "<χ²> = ", (mean(chi2_rel_vals))/(R_DOF))
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -1911,8 +1955,7 @@ version = "1.9.2+0"
 # ╟─7dc741d5-1730-4277-9ab0-a6540d18e487
 # ╠═182c99b8-4a60-4c57-abe3-c7ad5e8da857
 # ╠═a352f09c-e979-47e7-b6e2-52e23487eafd
-# ╠═4cfb5053-3819-46fb-9bad-d7a16d37c4fb
+# ╠═3babab2d-e59a-4a9e-8230-73ef775dd5d7
 # ╠═4025de0e-cfa5-4586-b311-6c2272d5173c
-# ╟─961ad05c-817f-4d16-a5f7-4b32168357e0
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
