@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 4025de0e-cfa5-4586-b311-6c2272d5173c
-using LsqFit, CSV, DataFrames, PlutoUI, Plots,PlutoTeachingTools, NPZ, LaTeXStrings, Statistics, LinearAlgebra, DelimitedFiles, Optim, Distributions, Printf
+using LsqFit, CSV, DataFrames, PlutoUI, Plots,PlutoTeachingTools, NPZ, LaTeXStrings, Statistics, LinearAlgebra, DelimitedFiles, Optim, Distributions, Printf, UltraNest
 
 # ╔═╡ 456f552a-99d8-48e2-93cc-153501bf00fc
 begin
@@ -235,7 +235,7 @@ begin
     best_y_rel_noisy, best_Te_rel_noisy = best_params_rel_noisy
     min_chi2_rel_noisy = Optim.minimum(result_rel_noisy)
 
-    println("\n=== Results WITH noise (single itteration) ===")
+    println("\n=== Results WITH noise (single iteration) ===")
     println("Best-fit y (Non-relativistic): ", best_y_nr_noisy, ", min χ²: ", min_chi2_nr_noisy)
     println("Best-fit y (Relativistic): ", best_y_rel_noisy, ", Best-fit Te: ", best_Te_rel_noisy, ", min χ²: ", min_chi2_rel_noisy)
 
@@ -261,10 +261,10 @@ begin
         chi2_rel_vals[i] = Optim.minimum(res_rel)
     end
 
-    println("\n=== AVERAGE over $n_trials noise itterations ===")
+    println("\n=== AVERAGE over $n_trials noise iterations ===")
     println("Non-relativistic: <y> = ", mean(y_nr_vals), ", <χ²> = ", mean(chi2_nr_vals))
     println("Relativistic: <y> = ", mean(y_rel_vals), ", <Te> = ", mean(Te_rel_vals), ", <χ²> = ", mean(chi2_rel_vals))
-	println("\n=== AVERAGE over 100 noise itterations w. DOF ===")
+	println("\n=== AVERAGE over 100 noise iterations w. DOF ===")
 	println("Non-relativistic: <y> = ", "<χ²> = ", (mean(chi2_nr_vals))/(NR_DOF))
 	println("Relativistic: <y> = ", "<χ²> = ", (mean(chi2_rel_vals))/(R_DOF))
 end
@@ -286,6 +286,7 @@ PlutoTeachingTools = "661c6b06-c737-4d37-b85c-46df65de6f69"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+UltraNest = "6822f173-b0be-4018-9ee2-28bf56348d09"
 
 [compat]
 CSV = "~0.10.15"
@@ -298,6 +299,7 @@ Optim = "~1.10.0"
 Plots = "~1.40.17"
 PlutoTeachingTools = "~0.3.1"
 PlutoUI = "~0.7.68"
+UltraNest = "~0.1.0"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -306,7 +308,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.6"
 manifest_format = "2.0"
-project_hash = "baa63dd94026f236a7c49db932b3c1b9e8177395"
+project_hash = "d79faa1057c2948191bdcb15f2260749d58d1c31"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "7927b9af540ee964cc5d1b73293f1eb0b761a3a1"
@@ -487,6 +489,12 @@ deps = ["Serialization", "Sockets"]
 git-tree-sha1 = "d9d26935a0bcffc87d2613ce14c527c99fc543fd"
 uuid = "f0e56b4a-5159-44fe-b623-3e5288b988bb"
 version = "2.5.0"
+
+[[deps.Conda]]
+deps = ["Downloads", "JSON", "VersionParsing"]
+git-tree-sha1 = "b19db3927f0db4151cb86d073689f2428e524576"
+uuid = "8f4d0f93-b110-5947-807f-2305c1781a2d"
+version = "1.10.2"
 
 [[deps.ConstructionBase]]
 git-tree-sha1 = "b4b092499347b18a015186eae3042f72267106cb"
@@ -1341,6 +1349,12 @@ git-tree-sha1 = "1d36ef11a9aaf1e8b74dacc6a731dd1de8fd493d"
 uuid = "43287f4e-b6f4-7ad1-bb20-aadabca52c3d"
 version = "1.3.0"
 
+[[deps.PyCall]]
+deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization", "VersionParsing"]
+git-tree-sha1 = "9816a3826b0ebf49ab4926e2b18842ad8b5c8f04"
+uuid = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+version = "1.96.4"
+
 [[deps.Qt6Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Vulkan_Loader_jll", "Xorg_libSM_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_cursor_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "libinput_jll", "xkbcommon_jll"]
 git-tree-sha1 = "eb38d376097f47316fe089fc62cb7c6d85383a52"
@@ -1621,6 +1635,12 @@ deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 version = "1.11.0"
 
+[[deps.UltraNest]]
+deps = ["LinearAlgebra", "PyCall", "Random", "Statistics"]
+git-tree-sha1 = "5266bfb2280748e76178168d7ab11d004115cf0b"
+uuid = "6822f173-b0be-4018-9ee2-28bf56348d09"
+version = "0.1.0"
+
 [[deps.UnPack]]
 git-tree-sha1 = "387c1f73762231e86e0c9c5443ce3b4a0a9a0c2b"
 uuid = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
@@ -1664,6 +1684,11 @@ version = "1.7.0"
 git-tree-sha1 = "ca0969166a028236229f63514992fc073799bb78"
 uuid = "41fe7b60-77ed-43a1-b4f0-825fd5a5650d"
 version = "0.2.0"
+
+[[deps.VersionParsing]]
+git-tree-sha1 = "58d6e80b4ee071f5efd07fda82cb9fbe17200868"
+uuid = "81def892-9a0e-5fdd-b105-ffc91e053289"
+version = "1.3.0"
 
 [[deps.Vulkan_Loader_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Wayland_jll", "Xorg_libX11_jll", "Xorg_libXrandr_jll", "xkbcommon_jll"]
@@ -1953,9 +1978,9 @@ version = "1.9.2+0"
 # ╟─456f552a-99d8-48e2-93cc-153501bf00fc
 # ╟─afa9be39-1e55-4582-81db-7757beb1c497
 # ╟─7dc741d5-1730-4277-9ab0-a6540d18e487
-# ╠═182c99b8-4a60-4c57-abe3-c7ad5e8da857
-# ╠═a352f09c-e979-47e7-b6e2-52e23487eafd
-# ╠═3babab2d-e59a-4a9e-8230-73ef775dd5d7
+# ╟─182c99b8-4a60-4c57-abe3-c7ad5e8da857
+# ╟─a352f09c-e979-47e7-b6e2-52e23487eafd
+# ╟─3babab2d-e59a-4a9e-8230-73ef775dd5d7
 # ╠═4025de0e-cfa5-4586-b311-6c2272d5173c
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
