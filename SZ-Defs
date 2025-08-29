@@ -1,0 +1,16 @@
+# For the first cell with Expected rel and non rel SZ
+function load_numeric_matrix(filename)
+    lines = readlines(filename)
+    data = []
+    for line in lines
+        if isempty(line) || startswith(strip(line), "#")
+            continue
+        end
+        push!(data, [parse(Float64, x) for x in split(strip(line), r"[,\s]+")])
+    end
+    return reduce(vcat, [reshape(row, 1, :) for row in data])
+end
+
+function polynomial(coeffs, Te)
+    sum(coeffs .* [Te^i for i in 0:(length(coeffs)-1)])
+end
