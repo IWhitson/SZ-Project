@@ -17,6 +17,19 @@ end
 
 
 # Second Cell Conpute Chi squared rel and non using Te_10 files
+# Helper: parse only numeric lines
+function load_numeric_matrix(filename)
+    lines = readlines(filename)
+    data = []
+    for line in lines
+        if isempty(line) || startswith(strip(line), "#")
+            continue
+        end
+        push!(data, [parse(Float64, x) for x in split(strip(line), r"[,\s]+")])
+    end
+    return reduce(vcat, [reshape(row, 1, :) for row in data])
+end
+
 function expected_nrSZ(y, yconv, Tconv, nband)
     [1.0 / yconv[i] * Tconv[i] * y for i in 1:nband]
 end
