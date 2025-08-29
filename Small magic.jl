@@ -8,7 +8,10 @@ using InteractiveUtils
 using LsqFit, CSV, DataFrames, PlutoUI, Plots, PlutoTeachingTools, NPZ, LaTeXStrings, Statistics, LinearAlgebra, DelimitedFiles, Optim, Distributions, Printf, UltraNest, Conda, PyCall, DynamicHMC, LogDensityProblems, Random, StatsPlots
 
 # ╔═╡ 5e82a784-3fbd-4723-aab3-a00e4e77d6b3
-include("SZ-Defs")
+begin
+	include("SZ-Defs.jl")
+	include("SZ-Terms.jl")
+end
 
 # ╔═╡ 456f552a-99d8-48e2-93cc-153501bf00fc
 begin
@@ -32,21 +35,6 @@ end
 
 # ╔═╡ e3bd1e42-0ab9-48da-a858-a824734122a0
 begin
-	
-	# --- Load conversion tables ---
-	poly_pars = load_numeric_matrix("YrSZ2KCMB_polyfits.txt")
-	Tconv = load_numeric_matrix("KCMB2MJysr.txt")[:, 1]
-	yconv = load_numeric_matrix("KCMB2YSZ.txt")[:, 1]
-	
-	# --- Load band definitions and error bars ---
-	bands = load_numeric_matrix("sensitivity_calculations.txt")
-	band_inds = bands[:, 1]
-	band_errs = bands[:, 6]
-	nband = length(band_inds)
-	
-	y = 1e-4
-	Te = 10.0
-	
 	SZsig = zeros(nband)
 	nrSZsig = zeros(nband)
 	for i in 1:nband
@@ -60,36 +48,6 @@ end
 
 # ╔═╡ a352f09c-e979-47e7-b6e2-52e23487eafd
 begin
-	# --- Compute chi² for non-relativistic and relativistic SZ using Te_10.0 files ---
-	
-	# Helper to load expected and error values from a two-column text file
-	function load_expected_and_error(filename)
-	    expected = Float64[]
-	    errors = Float64[]
-	    for line in eachline(filename)
-	        if isempty(line) || startswith(strip(line), "#")
-	            continue
-	        end
-	        vals = split(strip(line))
-	        push!(expected, parse(Float64, vals[1]))
-	        push!(errors, parse(Float64, vals[2]))
-	    end
-	    return expected, errors
-	end
-	
-	# Load expected and error values
-	nr_expected, nr_errors = load_expected_and_error("Te_10.0_tSZ_signal.txt")
-	rel_expected, rel_errors = load_expected_and_error("Te_10.0_rSZ_signal.txt")
-	
-	# Generate observed values using the non-relativistic SZ model with y = 2e-4
-	y_obs = 1.1e-4
-	observed = [1.0 / yconv[i] * Tconv[i] * y_obs for i in 1:length(band_inds)]
-	
-	# Chi-squared function
-	function chi2(observed, expected, errors)
-	    sum((((observed .- expected).^2) ./ errors.^2))
-	end
-	
 	# Compute chi²
 	chi2_nr = chi2(observed, nr_expected, nr_errors)
 	chi2_rel = chi2(observed, rel_expected, rel_errors)
