@@ -48,6 +48,9 @@ end
 
 # ╔═╡ a352f09c-e979-47e7-b6e2-52e23487eafd
 begin
+	nr_expected, nr_errors = load_expected_and_error("Te_10.0_tSZ_signal.txt")
+	rel_expected, rel_errors = load_expected_and_error("Te_10.0_rSZ_signal.txt")
+
 	# Compute chi²
 	chi2_nr = chi2(observed, nr_expected, nr_errors)
 	chi2_rel = chi2(observed, rel_expected, rel_errors)
