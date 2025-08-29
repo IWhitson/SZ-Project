@@ -147,8 +147,6 @@ begin
 end
 
 # ╔═╡ 0d9c1d08-15e5-4750-b0e7-d6b3452bf8a6
-# ╠═╡ disabled = true
-#=╠═╡
 begin
     ultranest = pyimport("ultranest")
 
@@ -169,7 +167,6 @@ begin
     @show size(result["samples"])
 end
 
-  ╠═╡ =#
 
 # ╔═╡ 10cb23d0-d099-48c2-9b99-d68287574802
 # ╠═╡ disabled = true
@@ -2209,12 +2206,12 @@ version = "1.9.2+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═5e82a784-3fbd-4723-aab3-a00e4e77d6b3
+# ╟─5e82a784-3fbd-4723-aab3-a00e4e77d6b3
 # ╟─456f552a-99d8-48e2-93cc-153501bf00fc
 # ╟─afa9be39-1e55-4582-81db-7757beb1c497
-# ╠═e3bd1e42-0ab9-48da-a858-a824734122a0
-# ╠═a352f09c-e979-47e7-b6e2-52e23487eafd
-# ╠═3babab2d-e59a-4a9e-8230-73ef775dd5d7
+# ╟─e3bd1e42-0ab9-48da-a858-a824734122a0
+# ╟─a352f09c-e979-47e7-b6e2-52e23487eafd
+# ╟─3babab2d-e59a-4a9e-8230-73ef775dd5d7
 # ╠═0d9c1d08-15e5-4750-b0e7-d6b3452bf8a6
 # ╠═10cb23d0-d099-48c2-9b99-d68287574802
 # ╠═9c99336c-e34b-496c-a019-b3bb07a32518
