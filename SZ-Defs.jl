@@ -80,9 +80,3 @@ function chi2_model(y, expected_func, observed, errors)
     sum(((model .- observed) ./ errors).^2)
 end
 
-function chi2_rel_2d(params, observed, errors)
-    y, Te = params
-    model = expected_relSZ_2d(y, Te)
-    sum(((model .- observed) ./ errors).^2)
-end
-	
