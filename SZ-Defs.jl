@@ -57,3 +57,32 @@ end
 function chi2(observed, expected, errors)
     sum(((observed .- expected) ./ errors).^2)
 end
+
+# 3rd Cell, chi squared mimization w/w/o Noise
+# Function to generate expected SZ signal for a given y (non-relativistic)
+function expected_nrSZ(y)
+    [1.0 / yconv[i] * Tconv[i] * y for i in 1:length(band_inds)]
+end
+
+# Function to generate expected SZ signal for a given y and Te (relativistic)
+function expected_relSZ_2d(y, Te)
+    [polynomial(poly_pars[i, :], Te) * Tconv[i] * y for i in 1:length(band_inds)]
+end
+
+# Function to add Gaussian noise to model data
+function add_noise_to_data(model_data, errorbars)
+    return model_data .+ randn(length(model_data)) .* errorbars
+end
+
+# --- Minimize WITHOUT noise ---
+function chi2_model(y, expected_func, observed, errors)
+    model = expected_func(y)
+    sum(((model .- observed) ./ errors).^2)
+end
+
+function chi2_rel_2d(params, observed, errors)
+    y, Te = params
+    model = expected_relSZ_2d(y, Te)
+    sum(((model .- observed) ./ errors).^2)
+end
+	
