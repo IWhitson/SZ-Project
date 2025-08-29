@@ -72,6 +72,80 @@ begin
 	println("Chi² (Relativistic): ", chi2_rel)
 end
 
+# ╔═╡ 3babab2d-e59a-4a9e-8230-73ef775dd5d7
+begin
+	NR_DOF = 9 - 1
+	R_DOF = 9 - 2
+	function chi2_rel_2d(params, observed, errors)
+    y, Te = params
+    model = expected_relSZ_2d(y, Te)
+    sum(((model .- observed) ./ errors).^2)
+	end
+	
+	
+    result_nr = optimize(y -> chi2_model(y, expected_nrSZ, observed, nr_errors), 1e-6, 1e-3)
+    best_y_nr = Optim.minimizer(result_nr)
+    min_chi2_nr = Optim.minimum(result_nr)
+
+    initial_guess = [best_y_nr, 10.0]
+    lower = [1e-6, 1.0]
+    upper = [1e-3, 25.0]
+    result_rel = optimize(params -> chi2_rel_2d(params, rel_expected, rel_errors), lower, upper, initial_guess, Fminbox())
+    best_params_rel = Optim.minimizer(result_rel)
+    best_y_rel, best_Te_rel = best_params_rel
+    min_chi2_rel = Optim.minimum(result_rel)
+
+    println("=== Results WITHOUT noise ===")
+    println("Best-fit y (Non-relativistic): ", best_y_nr, ", min χ²: ", min_chi2_nr)
+    println("Best-fit y (Relativistic): ", best_y_rel, ", Best-fit Te: ", best_Te_rel, ", min χ²: ", min_chi2_rel)
+
+    # --- Minimize WITH noise (single realization) ---
+    observed_noisy = add_noise_to_data(observed, nr_errors)
+    rel_expected_noisy = add_noise_to_data(rel_expected, rel_errors)
+
+    result_nr_noisy = optimize(y -> chi2_model(y, expected_nrSZ, observed_noisy, nr_errors), 1e-6, 1e-3)
+    best_y_nr_noisy = Optim.minimizer(result_nr_noisy)
+    min_chi2_nr_noisy = Optim.minimum(result_nr_noisy)
+
+    result_rel_noisy = optimize(params -> chi2_rel_2d(params, rel_expected_noisy, rel_errors), lower, upper, [best_y_nr_noisy, 10.0], Fminbox())
+    best_params_rel_noisy = Optim.minimizer(result_rel_noisy)
+    best_y_rel_noisy, best_Te_rel_noisy = best_params_rel_noisy
+    min_chi2_rel_noisy = Optim.minimum(result_rel_noisy)
+
+    println("\n=== Results WITH noise (single iteration) ===")
+    println("Best-fit y (Non-relativistic): ", best_y_nr_noisy, ", min χ²: ", min_chi2_nr_noisy)
+    println("Best-fit y (Relativistic): ", best_y_rel_noisy, ", Best-fit Te: ", best_Te_rel_noisy, ", min χ²: ", min_chi2_rel_noisy)
+
+    # --- Run experiment 100 times and average ---
+    n_trials = 100
+    y_nr_vals = zeros(n_trials)
+    chi2_nr_vals = zeros(n_trials)
+    y_rel_vals = zeros(n_trials)
+    Te_rel_vals = zeros(n_trials)
+    chi2_rel_vals = zeros(n_trials)
+
+    for i in 1:n_trials
+        obs_noisy = add_noise_to_data(observed, nr_errors)
+        rel_noisy = add_noise_to_data(rel_expected, rel_errors)
+
+        res_nr = optimize(y -> chi2_model(y, expected_nrSZ, obs_noisy, nr_errors), 1e-6, 1e-3)
+        y_nr_vals[i] = Optim.minimizer(res_nr)
+        chi2_nr_vals[i] = Optim.minimum(res_nr)
+
+        res_rel = optimize(params -> chi2_rel_2d(params, rel_noisy, rel_errors), lower, upper, [y_nr_vals[i], 10.0], Fminbox())
+        best_params = Optim.minimizer(res_rel)
+        y_rel_vals[i], Te_rel_vals[i] = best_params
+        chi2_rel_vals[i] = Optim.minimum(res_rel)
+    end
+
+    println("\n=== AVERAGE over $n_trials noise iterations ===")
+    println("Non-relativistic: <y> = ", mean(y_nr_vals), ", <χ²> = ", mean(chi2_nr_vals))
+    println("Relativistic: <y> = ", mean(y_rel_vals), ", <Te> = ", mean(Te_rel_vals), ", <χ²> = ", mean(chi2_rel_vals))
+	println("\n=== AVERAGE over 100 noise iterations w. DOF ===")
+	println("Non-relativistic: <y> = ", "<χ²> = ", (mean(chi2_nr_vals))/(NR_DOF))
+	println("Relativistic: <y> = ", "<χ²> = ", (mean(chi2_rel_vals))/(R_DOF))
+end
+
 # ╔═╡ 0d9c1d08-15e5-4750-b0e7-d6b3452bf8a6
 # ╠═╡ disabled = true
 #=╠═╡
@@ -150,15 +224,34 @@ begin
 end
   ╠═╡ =#
 
-# ╔═╡ acebb757-3b8b-4f2a-8280-2e43d41f0e7d
+# ╔═╡ 0c09ab8b-f6af-48e6-8c98-64b2142510fa
 #=╠═╡
+begin
+	sampler_nr = ultranest.ReactiveNestedSampler(["slope", "offset", "scatter"], log_likelihood_nr, prior_transform)
+		result_nr = sampler_nr.run(min_num_live_points=100, min_ess=200)
+		
+		logZ_nr  = result_nr["logz"]
+end
+  ╠═╡ =#
+
+# ╔═╡ a341bf68-d408-45b1-93bc-cf97ead219cd
+#=╠═╡
+begin
+		
+	sampler_rel = ultranest.ReactiveNestedSampler(["slope", "offset", "scatter"], log_likelihood_rel, prior_transform)
+	result_rel = sampler_rel.run(min_num_live_points=100, min_ess=200)
+	
+	logZ_rel = result_rel["logz"]
+end
+  ╠═╡ =#
+
+# ╔═╡ acebb757-3b8b-4f2a-8280-2e43d41f0e7d
 begin
 	#model 2 is favored <1 as model 2 is the relitivistic and more accurate
 	BF = exp(logZ_rel - logZ_nr)
 		println("Bayes factor (Rel vs Non-Rel): ", BF)
 		
 end
-  ╠═╡ =#
 
 # ╔═╡ 47d68d36-dbf1-431a-bc43-abb28a3cebe1
 begin
@@ -180,121 +273,6 @@ begin
 	cornerplot(samples_rel, labels=lables, bins=40, linewidth=1.5)
 	
 end
-
-# ╔═╡ 3babab2d-e59a-4a9e-8230-73ef775dd5d7
-begin
-	NR_DOF = 9 - 1
-	R_DOF = 9 - 2
-    # Function to generate expected SZ signal for a given y (non-relativistic)
-    function expected_nrSZ(y)
-        [1.0 / yconv[i] * Tconv[i] * y for i in 1:length(band_inds)]
-    end
-
-    # Function to generate expected SZ signal for a given y and Te (relativistic)
-    function expected_relSZ_2d(y, Te)
-        [polynomial(poly_pars[i, :], Te) * Tconv[i] * y for i in 1:length(band_inds)]
-    end
-
-    # Function to add Gaussian noise to model data
-    function add_noise_to_data(model_data, errorbars)
-        return model_data .+ randn(length(model_data)) .* errorbars
-    end
-
-    # --- Minimize WITHOUT noise ---
-    function chi2_model(y, expected_func, observed, errors)
-        model = expected_func(y)
-        sum(((model .- observed) ./ errors).^2)
-    end
-
-    function chi2_rel_2d(params, observed, errors)
-        y, Te = params
-        model = expected_relSZ_2d(y, Te)
-        sum(((model .- observed) ./ errors).^2)
-    end
-	
-    result_nr = optimize(y -> chi2_model(y, expected_nrSZ, observed, nr_errors), 1e-6, 1e-3)
-    best_y_nr = Optim.minimizer(result_nr)
-    min_chi2_nr = Optim.minimum(result_nr)
-
-    initial_guess = [best_y_nr, 10.0]
-    lower = [1e-6, 1.0]
-    upper = [1e-3, 25.0]
-    result_rel = optimize(params -> chi2_rel_2d(params, rel_expected, rel_errors), lower, upper, initial_guess, Fminbox())
-    best_params_rel = Optim.minimizer(result_rel)
-    best_y_rel, best_Te_rel = best_params_rel
-    min_chi2_rel = Optim.minimum(result_rel)
-
-    println("=== Results WITHOUT noise ===")
-    println("Best-fit y (Non-relativistic): ", best_y_nr, ", min χ²: ", min_chi2_nr)
-    println("Best-fit y (Relativistic): ", best_y_rel, ", Best-fit Te: ", best_Te_rel, ", min χ²: ", min_chi2_rel)
-
-    # --- Minimize WITH noise (single realization) ---
-    observed_noisy = add_noise_to_data(observed, nr_errors)
-    rel_expected_noisy = add_noise_to_data(rel_expected, rel_errors)
-
-    result_nr_noisy = optimize(y -> chi2_model(y, expected_nrSZ, observed_noisy, nr_errors), 1e-6, 1e-3)
-    best_y_nr_noisy = Optim.minimizer(result_nr_noisy)
-    min_chi2_nr_noisy = Optim.minimum(result_nr_noisy)
-
-    result_rel_noisy = optimize(params -> chi2_rel_2d(params, rel_expected_noisy, rel_errors), lower, upper, [best_y_nr_noisy, 10.0], Fminbox())
-    best_params_rel_noisy = Optim.minimizer(result_rel_noisy)
-    best_y_rel_noisy, best_Te_rel_noisy = best_params_rel_noisy
-    min_chi2_rel_noisy = Optim.minimum(result_rel_noisy)
-
-    println("\n=== Results WITH noise (single iteration) ===")
-    println("Best-fit y (Non-relativistic): ", best_y_nr_noisy, ", min χ²: ", min_chi2_nr_noisy)
-    println("Best-fit y (Relativistic): ", best_y_rel_noisy, ", Best-fit Te: ", best_Te_rel_noisy, ", min χ²: ", min_chi2_rel_noisy)
-
-    # --- Run experiment 100 times and average ---
-    n_trials = 100
-    y_nr_vals = zeros(n_trials)
-    chi2_nr_vals = zeros(n_trials)
-    y_rel_vals = zeros(n_trials)
-    Te_rel_vals = zeros(n_trials)
-    chi2_rel_vals = zeros(n_trials)
-
-    for i in 1:n_trials
-        obs_noisy = add_noise_to_data(observed, nr_errors)
-        rel_noisy = add_noise_to_data(rel_expected, rel_errors)
-
-        res_nr = optimize(y -> chi2_model(y, expected_nrSZ, obs_noisy, nr_errors), 1e-6, 1e-3)
-        y_nr_vals[i] = Optim.minimizer(res_nr)
-        chi2_nr_vals[i] = Optim.minimum(res_nr)
-
-        res_rel = optimize(params -> chi2_rel_2d(params, rel_noisy, rel_errors), lower, upper, [y_nr_vals[i], 10.0], Fminbox())
-        best_params = Optim.minimizer(res_rel)
-        y_rel_vals[i], Te_rel_vals[i] = best_params
-        chi2_rel_vals[i] = Optim.minimum(res_rel)
-    end
-
-    println("\n=== AVERAGE over $n_trials noise iterations ===")
-    println("Non-relativistic: <y> = ", mean(y_nr_vals), ", <χ²> = ", mean(chi2_nr_vals))
-    println("Relativistic: <y> = ", mean(y_rel_vals), ", <Te> = ", mean(Te_rel_vals), ", <χ²> = ", mean(chi2_rel_vals))
-	println("\n=== AVERAGE over 100 noise iterations w. DOF ===")
-	println("Non-relativistic: <y> = ", "<χ²> = ", (mean(chi2_nr_vals))/(NR_DOF))
-	println("Relativistic: <y> = ", "<χ²> = ", (mean(chi2_rel_vals))/(R_DOF))
-end
-
-# ╔═╡ 0c09ab8b-f6af-48e6-8c98-64b2142510fa
-#=╠═╡
-begin
-	sampler_nr = ultranest.ReactiveNestedSampler(["slope", "offset", "scatter"], log_likelihood_nr, prior_transform)
-		result_nr = sampler_nr.run(min_num_live_points=100, min_ess=200)
-		
-		logZ_nr  = result_nr["logz"]
-end
-  ╠═╡ =#
-
-# ╔═╡ a341bf68-d408-45b1-93bc-cf97ead219cd
-#=╠═╡
-begin
-		
-	sampler_rel = ultranest.ReactiveNestedSampler(["slope", "offset", "scatter"], log_likelihood_rel, prior_transform)
-	result_rel = sampler_rel.run(min_num_live_points=100, min_ess=200)
-	
-	logZ_rel = result_rel["logz"]
-end
-  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
