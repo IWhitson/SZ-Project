@@ -76,10 +76,12 @@ end
 begin
 	NR_DOF = 9 - 1
 	R_DOF = 9 - 2
+
+	# Chi² for non-relativistic
 	function chi2_rel_2d(params, observed, errors)
-    y, Te = params
-    model = expected_relSZ_2d(y, Te)
-    sum(((model .- observed) ./ errors).^2)
+    	y, Te = params
+    	model = expected_relSZ_2d(y, Te)
+    	sum(((model .- observed) ./ errors).^2)
 	end
 	
 	
@@ -144,131 +146,6 @@ begin
 	println("\n=== AVERAGE over 100 noise iterations w. DOF ===")
 	println("Non-relativistic: <y> = ", "<χ²> = ", (mean(chi2_nr_vals))/(NR_DOF))
 	println("Relativistic: <y> = ", "<χ²> = ", (mean(chi2_rel_vals))/(R_DOF))
-end
-
-# ╔═╡ 0d9c1d08-15e5-4750-b0e7-d6b3452bf8a6
-begin
-    ultranest = pyimport("ultranest")
-
-    function loglike(params)
-        return -sum(params .^ 2)
-    end
-
-    function prior(cube)
-        return 10 .* cube .- 5  # maps [0,1] → [-5,5]
-    end
-
-    sampler = ultranest.ReactiveNestedSampler(["x", "y"], loglike, prior)
-    result = sampler.run(min_num_live_points=50, min_ess=100)
-
-    # Output summary
-    @show result["logz"]
-    @show result["logzerr"]
-    @show size(result["samples"])
-end
-
-
-# ╔═╡ 10cb23d0-d099-48c2-9b99-d68287574802
-# ╠═╡ disabled = true
-#=╠═╡
-begin
-    xvals = band_inds
-    sz_signal = SZsig
-    sz_err = band_errs
-    n = length(xvals)
-end
-
-  ╠═╡ =#
-
-# ╔═╡ 9c99336c-e34b-496c-a019-b3bb07a32518
-#=╠═╡
-begin
-    function prior_transform(cube)
-        slope   = cube[1] * 20 - 10
-        offset  = cube[2] * 200 - 100
-        scatter = 10^(cube[3] * (log10(10) - log10(0.001)) + log10(0.001))
-        return [slope, offset, scatter]
-    end
-
-    function log_likelihood(params)
-        slope, offset, scatter = params
-        y_model = slope .* (xvals .- mean(xvals)) .+ offset
-        total_err = sqrt.(sz_err .^ 2 .+ scatter ^ 2)
-        residuals = sz_signal .- y_model
-        return sum(logpdf.(Normal(0, 1), residuals ./ total_err))
-    end
-
-    sampler = ultranest.ReactiveNestedSampler(["slope", "offset", "scatter"], log_likelihood, prior_transform)
-    result = sampler.run(min_num_live_points=50, min_ess=100)
-end
-
-  ╠═╡ =#
-
-# ╔═╡ 76f45ce7-46af-482d-8550-ea98484bf04f
-#=╠═╡
-begin
-	function make_log_likelihood(sz_model::Vector{Float64})
-	    return function(params)
-	        slope, offset, scatter = params
-	        y_model = slope .* (xvals .- mean(xvals)) .+ offset
-	        total_err = sqrt.(sz_err .^ 2 .+ scatter^2)
-	        residuals = sz_model .- y_model
-	        return sum(logpdf.(Normal(0, 1), residuals ./ total_err))
-	    end
-	end
-	log_likelihood_rel = make_log_likelihood(SZsig)
-	log_likelihood_nr  = make_log_likelihood(nrSZsig)
-end
-  ╠═╡ =#
-
-# ╔═╡ 0c09ab8b-f6af-48e6-8c98-64b2142510fa
-#=╠═╡
-begin
-	sampler_nr = ultranest.ReactiveNestedSampler(["slope", "offset", "scatter"], log_likelihood_nr, prior_transform)
-		result_nr = sampler_nr.run(min_num_live_points=100, min_ess=200)
-		
-		logZ_nr  = result_nr["logz"]
-end
-  ╠═╡ =#
-
-# ╔═╡ a341bf68-d408-45b1-93bc-cf97ead219cd
-#=╠═╡
-begin
-		
-	sampler_rel = ultranest.ReactiveNestedSampler(["slope", "offset", "scatter"], log_likelihood_rel, prior_transform)
-	result_rel = sampler_rel.run(min_num_live_points=100, min_ess=200)
-	
-	logZ_rel = result_rel["logz"]
-end
-  ╠═╡ =#
-
-# ╔═╡ acebb757-3b8b-4f2a-8280-2e43d41f0e7d
-begin
-	#model 2 is favored <1 as model 2 is the relitivistic and more accurate
-	BF = exp(logZ_rel - logZ_nr)
-		println("Bayes factor (Rel vs Non-Rel): ", BF)
-		
-end
-
-# ╔═╡ 47d68d36-dbf1-431a-bc43-abb28a3cebe1
-begin
-	# Load posterior samples
-	samples_nr = result_nr["samples"]  # columns: slope, offset, scatter
-	lables = ["slope", "offset", "scatter"]
-	
-	# Corner plot
-	cornerplot(samples_nr, labels=lables, bins=40, linewidth=1.5)
-	
-end
-
-# ╔═╡ 6b13c76e-dbe7-4ca3-afb8-26681751bf0f
-begin
-	# Load posterior samples
-	samples_rel = result_rel["samples"]  # columns: slope, offset, scatter
-
-	# Corner plot
-	cornerplot(samples_rel, labels=lables, bins=40, linewidth=1.5)
-	
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2209,18 +2086,9 @@ version = "1.9.2+0"
 # ╟─5e82a784-3fbd-4723-aab3-a00e4e77d6b3
 # ╟─456f552a-99d8-48e2-93cc-153501bf00fc
 # ╟─afa9be39-1e55-4582-81db-7757beb1c497
-# ╟─e3bd1e42-0ab9-48da-a858-a824734122a0
-# ╟─a352f09c-e979-47e7-b6e2-52e23487eafd
-# ╟─3babab2d-e59a-4a9e-8230-73ef775dd5d7
-# ╠═0d9c1d08-15e5-4750-b0e7-d6b3452bf8a6
-# ╠═10cb23d0-d099-48c2-9b99-d68287574802
-# ╠═9c99336c-e34b-496c-a019-b3bb07a32518
-# ╠═76f45ce7-46af-482d-8550-ea98484bf04f
-# ╠═0c09ab8b-f6af-48e6-8c98-64b2142510fa
-# ╠═a341bf68-d408-45b1-93bc-cf97ead219cd
-# ╠═acebb757-3b8b-4f2a-8280-2e43d41f0e7d
-# ╠═47d68d36-dbf1-431a-bc43-abb28a3cebe1
-# ╠═6b13c76e-dbe7-4ca3-afb8-26681751bf0f
+# ╠═e3bd1e42-0ab9-48da-a858-a824734122a0
+# ╠═a352f09c-e979-47e7-b6e2-52e23487eafd
+# ╠═3babab2d-e59a-4a9e-8230-73ef775dd5d7
 # ╠═4025de0e-cfa5-4586-b311-6c2272d5173c
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
