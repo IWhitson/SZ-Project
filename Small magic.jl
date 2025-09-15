@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ 4025de0e-cfa5-4586-b311-6c2272d5173c
-using LsqFit, CSV, DataFrames, PlutoUI, Plots, PlutoTeachingTools, NPZ, LaTeXStrings, Statistics, LinearAlgebra, DelimitedFiles, Optim, Printf, UltraNest, Conda, PyCall, DynamicHMC, LogDensityProblems, Random, StatsPlots, Turing
+using LsqFit, CSV, DataFrames, PlutoUI, Plots, PlutoTeachingTools, NPZ, LaTeXStrings, Statistics, LinearAlgebra, DelimitedFiles, Optim, Printf, UltraNest, Conda, PyCall, DynamicHMC, LogDensityProblems, Random, Turing, StatsPlots
 
 # ╔═╡ 5e82a784-3fbd-4723-aab3-a00e4e77d6b3
 include("SZ-Defs.jl")
@@ -150,6 +150,15 @@ begin
 	println("Relativistic: <y> = ", "<χ²> = ", (mean(chi2_rel_vals))/(R_DOF))
 end
 
+# ╔═╡ 833d595e-b902-4c25-9a3a-d838a703c447
+println(rel_expected)
+
+# ╔═╡ e5a94fd6-fd5e-4cea-ac33-514eff238d15
+println(rel_errors)
+
+# ╔═╡ 4ce55a8a-79be-44e2-bdc8-0c2f15c1b8af
+println(observed)
+
 # ╔═╡ 1e6b3942-6310-404b-88b6-b6039f0b2ee5
 begin
 	function loglike_nrSZ(y)
@@ -170,26 +179,59 @@ begin
 	@model function nrSZ_model(obs, band_errs)
 	    y ~ Uniform(1e-6, 1e-3)
 	    expected = expected_nrSZ(y)
-	    for i in 1:length(obs)
-	        obs[i] ~ Normal(expected[i], band_errs[i])
-	    end
+		obs ~ MvNormal(expected, band_errs)
 	end
 	
 	chain_nr = sample(nrSZ_model(obs_KCMB2YSZ, band_errs), NUTS(), 1000)
+	
 end
 
 # ╔═╡ 73ae5ccf-fde0-426a-84e5-a857b393dcc3
 begin
 	@model function relSZ_model(obs, band_errs)
 	    y ~ Uniform(1e-6, 1e-3)
-	    Te ~ Uniform(1.0, 25.0)
+	    Te ~ Uniform(1.0, 20.0)
+
+		# Model prediction in each band
 	    expected = [polynomial(poly_pars[i, :], Te) * Tconv[i] * y for i in 1:nband]
-	    for i in 1:length(obs)
-	        obs[i] ~ Normal(expected[i], band_errs[i])
-	    end
+		
+		#CALCULATE THE LIKLEYHOOD INSIDE OF THE THIS FUNCTION ABOVE. PUT THE EXPECTED INTO THE LIKLEYHOOD
+		
+		#Likelihood: compare observed to expected
+		for i in 1:length(obs)
+        	obs[i] ~ Normal(expected[i], band_errs[i])
+    	end
 	end
 	
-	chain_rel = sample(relSZ_model(obs_KCMB2YSZ, band_errs), NUTS(), 1000)
+	
+	chain_rel = sample(relSZ_model(observed, band_errs), NUTS(), 5000)
+	
+end
+
+# ╔═╡ b756d7f3-9788-45c0-b9fb-f1b22ecae16d
+println(observed)
+
+# ╔═╡ 9d87c841-d219-45b8-8d90-3969f033d5f6
+println(band_errs)
+
+# ╔═╡ 3b3ccb4b-63c2-4174-b25d-160c2de10357
+println(length(obs_KCMB2YSZ))
+
+# ╔═╡ a81a4c62-06fd-46ac-8603-d2a8a7029adf
+begin
+	expected = [polynomial(poly_pars[k, :], 10.0) * Tconv[k] * 1e-4 for k in 1:nband]
+	println("Observed: ", obs_KCMB2YSZ)
+	println("Model (Te=10, y=1e-4): ", expected)
+end
+
+# ╔═╡ aeba284f-afdc-4f40-bac6-3d08793a77bd
+println(expected)
+
+# ╔═╡ 36bde6cc-2cae-4cfa-99cf-2e65c7eb3598
+begin
+	expected_test = [polynomial(poly_pars[i, :], 10.0) * Tconv[i] * 1.1e-4 for i in 1:nband]
+	println("Observed: ", observed)
+	println("Expected (Te=10, y=1.1e-4): ", expected_test)
 end
 
 # ╔═╡ 7e774def-fd7a-484b-98aa-1c65b59fdd79
@@ -198,9 +240,26 @@ begin
 	plot(chain_rel)
 end
 
+# ╔═╡ 220ee584-b2c4-477e-84c5-34283e75011c
+begin
+	test_expected = [polynomial(poly_pars[i, :], 10.0) * Tconv[i] * 1e-4 for i in 1:nband]
+	println("Expected SZ signal for y=1e-4, Te=10: ", test_expected)
+end
+
+# ╔═╡ 4083b4f8-e87b-421b-92d3-19d890f994a0
+for i in 1:nband
+    println("Band $i: obs = ", obs_KCMB2YSZ[i], ", expected = ", test_expected[i])
+end
+
 # ╔═╡ 00045d2b-52a0-46d3-9edd-aecd5e7433f0
 	# Non-relativistic
 	plot(chain_nr)
+
+# ╔═╡ f21d71d2-6a45-4fcd-a3b9-d4674cb919c7
+begin
+	residuals = observed .- expected
+	scatter(1:length(residuals), residuals, yerr=band_errs, xlabel="Band", ylabel="Residual (Observed - Expected)", title="Residuals per Band")
+end
 
 # ╔═╡ 7b5f2804-8156-4f44-bd11-d43c5b4648a0
 begin
@@ -211,6 +270,40 @@ begin
 	# Scatter plot of samples
 	scatter(ys, Tes, xlabel="Compton y", ylabel="Te [keV]", title="Posterior Samples: y vs Te")
 end
+
+# ╔═╡ aa1d371d-2a3a-47b6-81fb-daa02683fd13
+begin
+	println("y: min=", minimum(ys), " max=", maximum(ys), " mean=", mean(ys))
+	println("Te: min=", minimum(Tes), " max=", maximum(Tes), " mean=", mean(Tes))
+	println("obs_KCMB2YSZ: ", obs_KCMB2YSZ)
+	println("band_errs: ", band_errs)
+end
+
+# ╔═╡ 3ec4ae76-a987-47ec-af18-3f42bdaf842f
+begin
+    histogram2d(
+        ys, Tes,
+        nbins=(50, 50),
+        xlabel="Compton y",
+        ylabel="Te [keV]",
+        title="Posterior Density: y vs Te",
+        colorbar_title="Sample Density"
+    )
+end
+
+# ╔═╡ c6e2a54e-3ed6-47b9-99e6-27400a4114cf
+begin
+    heatmap(
+        observed,
+        expected_test,
+        xlabel="Observed",
+        ylabel="Expected (Te=10, y=1.1e-4)",
+        title="Observed vs Expected Value Heatmap"
+    )
+end
+
+# ╔═╡ 12314f80-6c34-4c66-a171-d6605d9d7117
+println(Tes)
 
 # ╔═╡ 4e54c87b-1aa5-4234-81c9-509ab6764072
 # Or use a density contour
@@ -2933,13 +3026,29 @@ version = "1.9.2+0"
 # ╟─afa9be39-1e55-4582-81db-7757beb1c497
 # ╠═e3bd1e42-0ab9-48da-a858-a824734122a0
 # ╠═a352f09c-e979-47e7-b6e2-52e23487eafd
+# ╠═833d595e-b902-4c25-9a3a-d838a703c447
+# ╠═e5a94fd6-fd5e-4cea-ac33-514eff238d15
+# ╠═4ce55a8a-79be-44e2-bdc8-0c2f15c1b8af
 # ╠═3babab2d-e59a-4a9e-8230-73ef775dd5d7
 # ╠═1e6b3942-6310-404b-88b6-b6039f0b2ee5
 # ╠═a4293822-0b1d-4228-869b-5a70e15f89e5
 # ╠═73ae5ccf-fde0-426a-84e5-a857b393dcc3
+# ╠═b756d7f3-9788-45c0-b9fb-f1b22ecae16d
+# ╠═aeba284f-afdc-4f40-bac6-3d08793a77bd
+# ╠═9d87c841-d219-45b8-8d90-3969f033d5f6
+# ╠═3b3ccb4b-63c2-4174-b25d-160c2de10357
+# ╠═a81a4c62-06fd-46ac-8603-d2a8a7029adf
+# ╠═36bde6cc-2cae-4cfa-99cf-2e65c7eb3598
 # ╠═7e774def-fd7a-484b-98aa-1c65b59fdd79
+# ╠═aa1d371d-2a3a-47b6-81fb-daa02683fd13
+# ╠═220ee584-b2c4-477e-84c5-34283e75011c
+# ╠═4083b4f8-e87b-421b-92d3-19d890f994a0
 # ╠═00045d2b-52a0-46d3-9edd-aecd5e7433f0
+# ╠═f21d71d2-6a45-4fcd-a3b9-d4674cb919c7
 # ╠═7b5f2804-8156-4f44-bd11-d43c5b4648a0
+# ╠═3ec4ae76-a987-47ec-af18-3f42bdaf842f
+# ╠═c6e2a54e-3ed6-47b9-99e6-27400a4114cf
+# ╠═12314f80-6c34-4c66-a171-d6605d9d7117
 # ╠═4e54c87b-1aa5-4234-81c9-509ab6764072
 # ╠═4025de0e-cfa5-4586-b311-6c2272d5173c
 # ╟─00000000-0000-0000-0000-000000000001
