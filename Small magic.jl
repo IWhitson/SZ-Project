@@ -155,8 +155,153 @@ begin
 	# Loading the files
 	ymap = NPZ.npzread("halo_272369533/ymap_orig.npy")
 	Tymap = NPZ.npzread("halo_272369533/Tymap_orig.npy")
-	band1_signal = NPZ.npzread("halo_272369533/B1_rSZ_signal.npy")
+	band10_signal = NPZ.npzread("halo_272369533/B10_rSZ_signal.npy")
+
+	comm_res = 20.0 # arcsec
+	comm_sig = comm_res / 2 / sqrt(2 * log(2))
+	Omega_beam = 2 * π * (comm_sig / 3600 * π / 180)^2 # sr
+	MJysr2Jybeam = 1e6 * Omega_beam
 end
+
+# ╔═╡ 732ed520-9ebf-4d54-ab1a-ad2f5797143a
+begin
+	# Prepare the Data for Fitting
+	# List all files in the data folder to see available bands
+	data_folder = "halo_272369533"
+	files = readdir(data_folder)
+	println("Files in data folder: ", files)
+	
+	# Let's assume your bands are named like B1, B2, etc.
+	# We'll collect the noisy rSZ maps for each band
+	band_names = ["B3", "B4", "B5", "B6", "B7", "B8", "B9", "B10"]
+
+	#Load the Signal rSZ maps for each band into a list
+	signal_maps = []
+	for band in band_names
+		filename = joinpath(data_folder, "$(band)_rSZ_signal.npy")
+		Signal = NPZ.npzread(filename)
+		push!(signal_maps, Signal)
+	end
+	
+	# Load the noiseless rSZ maps for each band into a list
+	noiseless_maps = []
+	for band in band_names
+    	filename = joinpath(data_folder, "$(band)_rSZ_20.0arcsec_Jybeam.npy")
+    	NL_jy = NPZ.npzread(filename)
+    	NL_mjy = NL_jy ./ 1e6  # Convert Jy/beam to MJy/beam
+    	push!(noiseless_maps, NL_mjy)
+	end
+
+	# Load the noisy rSZ maps for each band into a list
+	noisy_maps = []
+	for band in band_names
+    	filename = joinpath(data_folder, "$(band)_rSZ_20.0arcsec_Jybeam_noisy.npy")
+    	N_jy = NPZ.npzread(filename)
+    	N_mjy = N_jy ./ 1e6  # Convert Jy/beam to MJy/beam
+    	push!(noisy_maps, N_mjy)
+	end
+		
+	
+	# Now, noisy_maps is a list of 2D arrays (one per band), all the same shape
+	# Let's stack them into a 3D array: (n_bands, n_x, n_y)
+	signal_cube = cat(signal_maps...; dims=3)
+	noiseless_cube = cat(noiseless_maps...; dims=3)
+	noisy_cube = cat(noisy_maps...; dims=3)  # dims=3 stacks along the 3rd dimension
+	
+		
+	# Set Up the Model
+	
+	# Example: get observed values for pixel (i, j)
+	i, j = 50, 50  # example pixel indices
+	observed_pixel_signal = signal_cube[i, j, :]
+	observed_pixel_noiseless = noiseless_cube[i, j, :]
+	observed_pixel_noisy = noisy_cube[i, j, :]
+	
+end
+
+# ╔═╡ 14ea106b-a1f2-45c7-85ee-f1bc45e4b3ae
+begin
+	# Print info about noisy_maps
+	println("noisy_maps type: ", typeof(noisy_maps))
+	println("Number of bands loaded: ", length(noisy_maps))
+	println("Shape of first band map: ", size(noisy_maps[1]))
+	println("Sample data from first band map: ", noisy_maps[1][1:5, 1:5])  # print a 5x5 block
+end
+
+# ╔═╡ 15a567eb-363e-453c-aa49-a6f4e08e0114
+begin
+	# Print info about noisy_cube
+	println("noisy_cube type: ", typeof(signal_cube))
+	println("Shape of noisy_cube: ", size(signal_cube))
+	println("Sample data from noisy_cube (band 1): ", signal_cube[1:5, 1:5, 1])  # 5x5 block from band 1	
+end
+
+# ╔═╡ ab627c15-fe55-4e0f-8fae-e0ec5e7a8567
+begin
+	# Print info about observed_pixel
+	println("observed_pixel type: ", typeof(observed_pixel_signal))
+	println("Observed pixel values across bands at (", i, ",", j, "): ", observed_pixel_signal)
+end
+
+# ╔═╡ ba797ca7-b916-4c61-9995-26fa36031f0a
+begin
+    # Check lengths
+    println("Observed pixel length: ", length(observed_pixel_signal))
+    println("Model output length: ", length(expected_relSZ_2d(1e-5, 8.0)))
+
+    # Error estimate for each band (adjust as needed)
+    errors = bands[:, 6]
+
+    # Define chi2 objective for this pixel
+    function chi2_objective(params)
+		y, Te = params
+    	model = expected_relSZ_2d(y, Te)
+        # Only compare up to the minimum length to avoid mismatch
+        n = min(length(observed_pixel_signal), length(model))
+        return chi2(observed_pixel_signal[1:n], model[1:n], errors[1:n])
+    end
+
+    # Minimize chi2
+    result_pix = optimize(chi2_objective, initial_guess, BFGS())
+
+    # Store best-fit values
+    best_fit_pix = Optim.minimizer(result_pix)
+    best_y_pix, best_Te_pix = best_fit_pix
+
+    println("Best-fit y: ", best_y_pix)
+    println("Best-fit Te: ", best_Te_pix)
+end
+
+# ╔═╡ 5ee6fa7f-3e19-46e7-9771-3529b56a8ead
+println(observed_pixel_signal)
+
+# ╔═╡ e411c32f-e42f-4139-8d0d-3c25d7a168ad
+println(errors)
+
+# ╔═╡ 8ac83124-6821-43e7-9577-7bd14604a786
+println(Te_map)
+
+# ╔═╡ fd431b91-4f70-4b99-a310-3f90021ba9ce
+# Plot chi2 map to visualize poor fits
+	heatmap(chi2_map, title="Chi² map", xlabel="j", ylabel="i", colorbar_title="chi²")
+
+# ╔═╡ e26129d7-6462-42fa-a753-980850a409ea
+# Plot the y-parameter map
+heatmap(y_map, title="Best-fit y map", xlabel="j", ylabel="i", colorbar_title="y")
+	
+
+# ╔═╡ ec85d743-caa9-485f-a2fc-d332a5471180
+# Plot the temperature map
+heatmap(Te_map, title="Best-fit Te map", xlabel="j", ylabel="i", colorbar_title="Te (keV)")
+
+# ╔═╡ db82ef3e-d4da-4404-8a13-3b256cd5bb15
+begin
+	println("Observed pixel length: ", length(observed_pixel))
+	println("Model output length: ", length(expected_relSZ_2d(1e-5, 8.0)))
+end
+
+# ╔═╡ 658866bf-e3a1-4744-81e1-977a572f123c
+readdir("halo_272369533")
 
 # ╔═╡ 1e6b3942-6310-404b-88b6-b6039f0b2ee5
 # ╠═╡ disabled = true
@@ -271,6 +416,69 @@ end
 # Or use a density contour
 	density(ys, Tes, xlabel="Compton y", ylabel="Te [keV]", title="Posterior Density: y vs Te")
   ╠═╡ =#
+
+# ╔═╡ 775de6ce-3814-48fe-b4c2-9925f21603d3
+# ╠═╡ disabled = true
+#=╠═╡
+
+	begin
+		# Define region to fit (e.g., 10x10 block)
+		i_range = 1:25
+		j_range = 1:25
+		
+		y_map = zeros(length(i_range), length(j_range))
+		Te_map = zeros(length(i_range), length(j_range))
+		
+		for (ii, i) in enumerate(i_range)
+		    for (jj, j) in enumerate(j_range)
+		        observed_pixel = noisy_cube[i, j, :]
+		        errors = fill(0.01, length(observed_pixel))
+		        function chi2_objective(params)
+		            y, Te = params
+		            model = expected_relSZ_2d(y, Te)
+		            n = min(length(observed_pixel), length(model))
+		            return chi2(observed_pixel[1:n], model[1:n], errors[1:n])
+		        end
+		        initial_guess = [1e-5, 10.0]
+		        result = optimize(chi2_objective, initial_guess, BFGS())
+		        best_fit = Optim.minimizer(result)
+		        y_map[ii, jj] = best_fit[1]
+		        Te_map[ii, jj] = best_fit[2]
+				println("Pixel (", i, ",", j, "): Best-fit y = ", best_fit[1], ", Best-fit Te = ", best_fit[2])
+		    end
+		end
+	end
+  ╠═╡ =#
+
+# ╔═╡ 55e66a63-0d2d-4129-9f2d-36e4dd3f364c
+begin
+	i_range = 1:25
+	j_range = 1:25
+	
+	y_map = zeros(length(i_range), length(j_range))
+	Te_map = zeros(length(i_range), length(j_range))
+	chi2_map = zeros(length(i_range), length(j_range))
+	
+	for (ii, i) in enumerate(i_range)
+	    for (jj, j) in enumerate(j_range)
+	        observed_pixel_signal = signal_cube[i, j, :]
+	        errors = bands[:, 6]
+	        function chi2_objective(params)
+	            y, Te = params
+	            model = expected_relSZ_2d(y, Te)
+	            n = min(length(observed_pixel_signal), length(model))
+	            return chi2(observed_pixel_signal[1:n], model[1:n], errors[1:n])
+	        end
+	        initial_guess = [1e-5, 8.0]
+	        result = optimize(chi2_objective, initial_guess, BFGS())
+	        best_fit = Optim.minimizer(result)
+	        y_map[ii, jj] = best_fit[1]
+	        Te_map[ii, jj] = best_fit[2]
+	        chi2_map[ii, jj] = Optim.minimum(result)
+	        println("Pixel (", i, ",", j, "): Best-fit y = ", best_fit[1], ", Best-fit Te = ", best_fit[2])
+	        end
+	    end
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2991,6 +3199,21 @@ version = "1.9.2+0"
 # ╠═a352f09c-e979-47e7-b6e2-52e23487eafd
 # ╠═3babab2d-e59a-4a9e-8230-73ef775dd5d7
 # ╠═cfc6d6b9-653b-4144-b972-6907253a3af0
+# ╠═732ed520-9ebf-4d54-ab1a-ad2f5797143a
+# ╠═14ea106b-a1f2-45c7-85ee-f1bc45e4b3ae
+# ╠═15a567eb-363e-453c-aa49-a6f4e08e0114
+# ╠═ab627c15-fe55-4e0f-8fae-e0ec5e7a8567
+# ╠═ba797ca7-b916-4c61-9995-26fa36031f0a
+# ╟─775de6ce-3814-48fe-b4c2-9925f21603d3
+# ╠═55e66a63-0d2d-4129-9f2d-36e4dd3f364c
+# ╠═5ee6fa7f-3e19-46e7-9771-3529b56a8ead
+# ╠═e411c32f-e42f-4139-8d0d-3c25d7a168ad
+# ╠═8ac83124-6821-43e7-9577-7bd14604a786
+# ╠═fd431b91-4f70-4b99-a310-3f90021ba9ce
+# ╠═e26129d7-6462-42fa-a753-980850a409ea
+# ╠═ec85d743-caa9-485f-a2fc-d332a5471180
+# ╠═db82ef3e-d4da-4404-8a13-3b256cd5bb15
+# ╠═658866bf-e3a1-4744-81e1-977a572f123c
 # ╠═1e6b3942-6310-404b-88b6-b6039f0b2ee5
 # ╠═a4293822-0b1d-4228-869b-5a70e15f89e5
 # ╠═73ae5ccf-fde0-426a-84e5-a857b393dcc3
