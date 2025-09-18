@@ -150,14 +150,13 @@ begin
 	println("Relativistic: <y> = ", "<χ²> = ", (mean(chi2_rel_vals))/(R_DOF))
 end
 
-# ╔═╡ 833d595e-b902-4c25-9a3a-d838a703c447
-println(rel_expected)
-
-# ╔═╡ e5a94fd6-fd5e-4cea-ac33-514eff238d15
-println(rel_errors)
-
-# ╔═╡ 4ce55a8a-79be-44e2-bdc8-0c2f15c1b8af
-println(observed)
+# ╔═╡ cfc6d6b9-653b-4144-b972-6907253a3af0
+begin
+	# Loading the files
+	ymap = NPZ.npzread("halo_272369533/ymap_orig.npy")
+	Tymap = NPZ.npzread("halo_272369533/Tymap_orig.npy")
+	band1_signal = NPZ.npzread("halo_272369533/B1_rSZ_signal.npy")
+end
 
 # ╔═╡ 1e6b3942-6310-404b-88b6-b6039f0b2ee5
 # ╠═╡ disabled = true
@@ -225,6 +224,16 @@ begin
 end
   ╠═╡ =#
 
+# ╔═╡ aa1d371d-2a3a-47b6-81fb-daa02683fd13
+#=╠═╡
+begin
+	println("y: min=", minimum(ys), " max=", maximum(ys), " mean=", mean(ys))
+	println("Te: min=", minimum(Tes), " max=", maximum(Tes), " mean=", mean(Tes))
+	println("obs_KCMB2YSZ: ", obs_KCMB2YSZ)
+	println("band_errs: ", band_errs)
+end
+  ╠═╡ =#
+
 # ╔═╡ 00045d2b-52a0-46d3-9edd-aecd5e7433f0
 #=╠═╡
 	# Non-relativistic
@@ -240,16 +249,6 @@ begin
 	
 	# Scatter plot of samples
 	scatter(ys, Tes, xlabel="Compton y", ylabel="Te [keV]", title="Posterior Samples: y vs Te")
-end
-  ╠═╡ =#
-
-# ╔═╡ aa1d371d-2a3a-47b6-81fb-daa02683fd13
-#=╠═╡
-begin
-	println("y: min=", minimum(ys), " max=", maximum(ys), " mean=", mean(ys))
-	println("Te: min=", minimum(Tes), " max=", maximum(Tes), " mean=", mean(Tes))
-	println("obs_KCMB2YSZ: ", obs_KCMB2YSZ)
-	println("band_errs: ", band_errs)
 end
   ╠═╡ =#
 
@@ -2990,10 +2989,8 @@ version = "1.9.2+0"
 # ╟─afa9be39-1e55-4582-81db-7757beb1c497
 # ╠═e3bd1e42-0ab9-48da-a858-a824734122a0
 # ╠═a352f09c-e979-47e7-b6e2-52e23487eafd
-# ╠═833d595e-b902-4c25-9a3a-d838a703c447
-# ╠═e5a94fd6-fd5e-4cea-ac33-514eff238d15
-# ╠═4ce55a8a-79be-44e2-bdc8-0c2f15c1b8af
 # ╠═3babab2d-e59a-4a9e-8230-73ef775dd5d7
+# ╠═cfc6d6b9-653b-4144-b972-6907253a3af0
 # ╠═1e6b3942-6310-404b-88b6-b6039f0b2ee5
 # ╠═a4293822-0b1d-4228-869b-5a70e15f89e5
 # ╠═73ae5ccf-fde0-426a-84e5-a857b393dcc3
