@@ -175,7 +175,7 @@ begin
 	# We'll collect the noisy rSZ maps for each band
 	band_names = ["B3", "B4", "B5", "B6", "B7", "B8", "B9", "B10"]
 
-	#Load the Signal rSZ maps for each band into a list
+	# Load the Signal rSZ maps for each band into a list
 	signal_maps = []
 	for band in band_names
 		filename = joinpath(data_folder, "$(band)_rSZ_signal.npy")
@@ -201,12 +201,10 @@ begin
     	push!(noisy_maps, N_mjy)
 	end
 		
-	
-	# Now, noisy_maps is a list of 2D arrays (one per band), all the same shape
-	# Let's stack them into a 3D array: (n_bands, n_x, n_y)
+	# Let's stack them into a 3D array: (x, y, band)
 	signal_cube = cat(signal_maps...; dims=3)
 	noiseless_cube = cat(noiseless_maps...; dims=3)
-	noisy_cube = cat(noisy_maps...; dims=3)  # dims=3 stacks along the 3rd dimension
+	noisy_cube = cat(noisy_maps...; dims=3)
 	
 		
 	# Set Up the Model
@@ -250,15 +248,16 @@ begin
     println("Model output length: ", length(expected_relSZ_2d(1e-5, 8.0)))
 
     # Error estimate for each band (adjust as needed)
-    errors = bands[:, 6]
-
+	halo_bands = load_numeric_matrix("sensitivity_calculations_halo.txt")
+    errors_halo = halo_bands[:, 6]
+	
     # Define chi2 objective for this pixel
     function chi2_objective(params)
 		y, Te = params
     	model = expected_relSZ_2d(y, Te)
         # Only compare up to the minimum length to avoid mismatch
         n = min(length(observed_pixel_signal), length(model))
-        return chi2(observed_pixel_signal[1:n], model[1:n], errors[1:n])
+        return chi2(observed_pixel_signal[1:n], model[1:n], errors_halo[1:n])
     end
 
     # Minimize chi2
@@ -272,11 +271,74 @@ begin
     println("Best-fit Te: ", best_Te_pix)
 end
 
+# ╔═╡ 775de6ce-3814-48fe-b4c2-9925f21603d3
+# ╠═╡ disabled = true
+#=╠═╡
+
+	begin
+		# Define region to fit (e.g., 10x10 block)
+		i_range = 1:25
+		j_range = 1:25
+		
+		y_map = zeros(length(i_range), length(j_range))
+		Te_map = zeros(length(i_range), length(j_range))
+		
+		for (ii, i) in enumerate(i_range)
+		    for (jj, j) in enumerate(j_range)
+		        observed_pixel = noisy_cube[i, j, :]
+		        errors = fill(0.01, length(observed_pixel))
+		        function chi2_objective(params)
+		            y, Te = params
+		            model = expected_relSZ_2d(y, Te)
+		            n = min(length(observed_pixel), length(model))
+		            return chi2(observed_pixel[1:n], model[1:n], errors[1:n])
+		        end
+		        initial_guess = [1e-5, 10.0]
+		        result = optimize(chi2_objective, initial_guess, BFGS())
+		        best_fit = Optim.minimizer(result)
+		        y_map[ii, jj] = best_fit[1]
+		        Te_map[ii, jj] = best_fit[2]
+				println("Pixel (", i, ",", j, "): Best-fit y = ", best_fit[1], ", Best-fit Te = ", best_fit[2])
+		    end
+		end
+	end
+  ╠═╡ =#
+
+# ╔═╡ 55e66a63-0d2d-4129-9f2d-36e4dd3f364c
+begin
+	i_range = 1:25
+	j_range = 1:25
+	
+	y_map = zeros(length(i_range), length(j_range))
+	Te_map = zeros(length(i_range), length(j_range))
+	chi2_map = zeros(length(i_range), length(j_range))
+	
+	for (ii, i) in enumerate(i_range)
+	    for (jj, j) in enumerate(j_range)
+	        observed_pixel_signal = signal_cube[i, j, :]
+	        errors_halo = halo_bands[:, 6]
+	        function chi2_objective(params)
+	            y, Te = params
+	            model = expected_relSZ_2d(y, Te)
+	            n = min(length(observed_pixel_signal), length(model))
+	            return chi2(observed_pixel_signal[1:n], model[1:n], errors_halo[1:n])
+	        end
+	        initial_guess = [1e-5, 8.0]
+	        result = optimize(chi2_objective, lower, upper, initial_guess, Fminbox(BFGS()))
+	        best_fit = Optim.minimizer(result)
+	        y_map[ii, jj] = best_fit[1]
+	        Te_map[ii, jj] = best_fit[2]
+	        chi2_map[ii, jj] = Optim.minimum(result)
+	        println("Pixel (", i, ",", j, "): Best-fit y = ", best_fit[1], ", Best-fit Te = ", best_fit[2])
+	        end
+	    end
+end
+
 # ╔═╡ 5ee6fa7f-3e19-46e7-9771-3529b56a8ead
 println(observed_pixel_signal)
 
 # ╔═╡ e411c32f-e42f-4139-8d0d-3c25d7a168ad
-println(errors)
+println(errors_halo)
 
 # ╔═╡ 8ac83124-6821-43e7-9577-7bd14604a786
 println(Te_map)
@@ -296,7 +358,7 @@ heatmap(Te_map, title="Best-fit Te map", xlabel="j", ylabel="i", colorbar_title=
 
 # ╔═╡ db82ef3e-d4da-4404-8a13-3b256cd5bb15
 begin
-	println("Observed pixel length: ", length(observed_pixel))
+	println("Observed pixel length: ", length(observed_pixel_signal))
 	println("Model output length: ", length(expected_relSZ_2d(1e-5, 8.0)))
 end
 
@@ -416,69 +478,6 @@ end
 # Or use a density contour
 	density(ys, Tes, xlabel="Compton y", ylabel="Te [keV]", title="Posterior Density: y vs Te")
   ╠═╡ =#
-
-# ╔═╡ 775de6ce-3814-48fe-b4c2-9925f21603d3
-# ╠═╡ disabled = true
-#=╠═╡
-
-	begin
-		# Define region to fit (e.g., 10x10 block)
-		i_range = 1:25
-		j_range = 1:25
-		
-		y_map = zeros(length(i_range), length(j_range))
-		Te_map = zeros(length(i_range), length(j_range))
-		
-		for (ii, i) in enumerate(i_range)
-		    for (jj, j) in enumerate(j_range)
-		        observed_pixel = noisy_cube[i, j, :]
-		        errors = fill(0.01, length(observed_pixel))
-		        function chi2_objective(params)
-		            y, Te = params
-		            model = expected_relSZ_2d(y, Te)
-		            n = min(length(observed_pixel), length(model))
-		            return chi2(observed_pixel[1:n], model[1:n], errors[1:n])
-		        end
-		        initial_guess = [1e-5, 10.0]
-		        result = optimize(chi2_objective, initial_guess, BFGS())
-		        best_fit = Optim.minimizer(result)
-		        y_map[ii, jj] = best_fit[1]
-		        Te_map[ii, jj] = best_fit[2]
-				println("Pixel (", i, ",", j, "): Best-fit y = ", best_fit[1], ", Best-fit Te = ", best_fit[2])
-		    end
-		end
-	end
-  ╠═╡ =#
-
-# ╔═╡ 55e66a63-0d2d-4129-9f2d-36e4dd3f364c
-begin
-	i_range = 1:25
-	j_range = 1:25
-	
-	y_map = zeros(length(i_range), length(j_range))
-	Te_map = zeros(length(i_range), length(j_range))
-	chi2_map = zeros(length(i_range), length(j_range))
-	
-	for (ii, i) in enumerate(i_range)
-	    for (jj, j) in enumerate(j_range)
-	        observed_pixel_signal = signal_cube[i, j, :]
-	        errors = bands[:, 6]
-	        function chi2_objective(params)
-	            y, Te = params
-	            model = expected_relSZ_2d(y, Te)
-	            n = min(length(observed_pixel_signal), length(model))
-	            return chi2(observed_pixel_signal[1:n], model[1:n], errors[1:n])
-	        end
-	        initial_guess = [1e-5, 8.0]
-	        result = optimize(chi2_objective, initial_guess, BFGS())
-	        best_fit = Optim.minimizer(result)
-	        y_map[ii, jj] = best_fit[1]
-	        Te_map[ii, jj] = best_fit[2]
-	        chi2_map[ii, jj] = Optim.minimum(result)
-	        println("Pixel (", i, ",", j, "): Best-fit y = ", best_fit[1], ", Best-fit Te = ", best_fit[2])
-	        end
-	    end
-end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
