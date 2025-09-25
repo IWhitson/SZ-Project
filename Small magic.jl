@@ -73,83 +73,6 @@ begin
 	println("Chi² (Relativistic): ", chi2_rel)
 end
 
-# ╔═╡ 3babab2d-e59a-4a9e-8230-73ef775dd5d7
-begin
-	using Distributions
-	NR_DOF = 9 - 1
-	R_DOF = 9 - 2
-
-	# Chi² for non-relativistic
-	function chi2_rel_2d(params, observed, errors)
-    	y, Te = params
-    	model = expected_relSZ_2d(y, Te)
-    	sum(((model .- observed) ./ errors).^2)
-	end
-	
-	
-    result_nr = optimize(y -> chi2_model(y, expected_nrSZ, observed, nr_errors), 1e-6, 1e-3)
-    best_y_nr = Optim.minimizer(result_nr)
-    min_chi2_nr = Optim.minimum(result_nr)
-
-    initial_guess = [best_y_nr, 10.0]
-    lower = [1e-6, 1.0]
-    upper = [1e-3, 25.0]
-    result_rel = optimize(params -> chi2_rel_2d(params, rel_expected, rel_errors), lower, upper, initial_guess, Fminbox())
-    best_params_rel = Optim.minimizer(result_rel)
-    best_y_rel, best_Te_rel = best_params_rel
-    min_chi2_rel = Optim.minimum(result_rel)
-
-    println("=== Results WITHOUT noise ===")
-    println("Best-fit y (Non-relativistic): ", best_y_nr, ", min χ²: ", min_chi2_nr)
-    println("Best-fit y (Relativistic): ", best_y_rel, ", Best-fit Te: ", best_Te_rel, ", min χ²: ", min_chi2_rel)
-
-    # --- Minimize WITH noise (single realization) ---
-    observed_noisy = add_noise_to_data(observed, nr_errors)
-    rel_expected_noisy = add_noise_to_data(rel_expected, rel_errors)
-
-    result_nr_noisy = optimize(y -> chi2_model(y, expected_nrSZ, observed_noisy, nr_errors), 1e-6, 1e-3)
-    best_y_nr_noisy = Optim.minimizer(result_nr_noisy)
-    min_chi2_nr_noisy = Optim.minimum(result_nr_noisy)
-
-    result_rel_noisy = optimize(params -> chi2_rel_2d(params, rel_expected_noisy, rel_errors), lower, upper, [best_y_nr_noisy, 10.0], Fminbox())
-    best_params_rel_noisy = Optim.minimizer(result_rel_noisy)
-    best_y_rel_noisy, best_Te_rel_noisy = best_params_rel_noisy
-    min_chi2_rel_noisy = Optim.minimum(result_rel_noisy)
-
-    println("\n=== Results WITH noise (single iteration) ===")
-    println("Best-fit y (Non-relativistic): ", best_y_nr_noisy, ", min χ²: ", min_chi2_nr_noisy)
-    println("Best-fit y (Relativistic): ", best_y_rel_noisy, ", Best-fit Te: ", best_Te_rel_noisy, ", min χ²: ", min_chi2_rel_noisy)
-
-    # --- Run experiment 100 times and average ---
-    n_trials = 100
-    y_nr_vals = zeros(n_trials)
-    chi2_nr_vals = zeros(n_trials)
-    y_rel_vals = zeros(n_trials)
-    Te_rel_vals = zeros(n_trials)
-    chi2_rel_vals = zeros(n_trials)
-
-    for i in 1:n_trials
-        obs_noisy = add_noise_to_data(observed, nr_errors)
-        rel_noisy = add_noise_to_data(rel_expected, rel_errors)
-
-        res_nr = optimize(y -> chi2_model(y, expected_nrSZ, obs_noisy, nr_errors), 1e-6, 1e-3)
-        y_nr_vals[i] = Optim.minimizer(res_nr)
-        chi2_nr_vals[i] = Optim.minimum(res_nr)
-
-        res_rel = optimize(params -> chi2_rel_2d(params, rel_noisy, rel_errors), lower, upper, [y_nr_vals[i], 10.0], Fminbox())
-        best_params = Optim.minimizer(res_rel)
-        y_rel_vals[i], Te_rel_vals[i] = best_params
-        chi2_rel_vals[i] = Optim.minimum(res_rel)
-    end
-
-    println("\n=== AVERAGE over $n_trials noise iterations ===")
-    println("Non-relativistic: <y> = ", mean(y_nr_vals), ", <χ²> = ", mean(chi2_nr_vals))
-    println("Relativistic: <y> = ", mean(y_rel_vals), ", <Te> = ", mean(Te_rel_vals), ", <χ²> = ", mean(chi2_rel_vals))
-	println("\n=== AVERAGE over 100 noise iterations w. DOF ===")
-	println("Non-relativistic: <y> = ", "<χ²> = ", (mean(chi2_nr_vals))/(NR_DOF))
-	println("Relativistic: <y> = ", "<χ²> = ", (mean(chi2_rel_vals))/(R_DOF))
-end
-
 # ╔═╡ cfc6d6b9-653b-4144-b972-6907253a3af0
 begin
 	# Loading the files
@@ -188,7 +111,7 @@ begin
 	for band in band_names
     	filename = joinpath(data_folder, "$(band)_rSZ_20.0arcsec_Jybeam.npy")
     	NL_jy = NPZ.npzread(filename)
-    	NL_mjy = NL_jy ./ 1e6  # Convert Jy/beam to MJy/beam
+    	NL_mjy = NL_jy ./ MJysr2Jybeam # Convert Jy/beam to MJy/str
     	push!(noiseless_maps, NL_mjy)
 	end
 
@@ -197,7 +120,7 @@ begin
 	for band in band_names
     	filename = joinpath(data_folder, "$(band)_rSZ_20.0arcsec_Jybeam_noisy.npy")
     	N_jy = NPZ.npzread(filename)
-    	N_mjy = N_jy ./ 1e6  # Convert Jy/beam to MJy/beam
+    	N_mjy = N_jy ./ MJysr2Jybeam  # Convert Jy/beam to MJy/str
     	push!(noisy_maps, N_mjy)
 	end
 		
@@ -217,6 +140,23 @@ begin
 	
 end
 
+# ╔═╡ 15a567eb-363e-453c-aa49-a6f4e08e0114
+begin
+	# Print info about noisy_cube
+	println("Signal_cube type: ", typeof(signal_cube))
+	println("Shape of signal_cube: ", size(signal_cube))
+	println("Sample data from signal_cube (band 1): ", signal_cube[1:5, 1:5, 1])  # 5x5 block from band 1	
+end
+
+# ╔═╡ 3a191ed0-fcfe-4f05-b072-af2bee6f2214
+begin
+	# Print info about noiseless_maps
+	println("noiseless_maps type: ", typeof(noiseless_maps))
+	println("Number of bands loaded: ", length(noiseless_maps))
+	println("Shape of first band map: ", size(noiseless_maps[1]))
+	println("Sample data from first band map: ", noiseless_maps[1][1:5, 1:5])  # print a 5x5 block
+end
+
 # ╔═╡ 14ea106b-a1f2-45c7-85ee-f1bc45e4b3ae
 begin
 	# Print info about noisy_maps
@@ -224,14 +164,6 @@ begin
 	println("Number of bands loaded: ", length(noisy_maps))
 	println("Shape of first band map: ", size(noisy_maps[1]))
 	println("Sample data from first band map: ", noisy_maps[1][1:5, 1:5])  # print a 5x5 block
-end
-
-# ╔═╡ 15a567eb-363e-453c-aa49-a6f4e08e0114
-begin
-	# Print info about noisy_cube
-	println("noisy_cube type: ", typeof(signal_cube))
-	println("Shape of noisy_cube: ", size(signal_cube))
-	println("Sample data from noisy_cube (band 1): ", signal_cube[1:5, 1:5, 1])  # 5x5 block from band 1	
 end
 
 # ╔═╡ ab627c15-fe55-4e0f-8fae-e0ec5e7a8567
@@ -271,51 +203,101 @@ begin
     println("Best-fit Te: ", best_Te_pix)
 end
 
-# ╔═╡ 775de6ce-3814-48fe-b4c2-9925f21603d3
-# ╠═╡ disabled = true
-#=╠═╡
+# ╔═╡ 5ee6fa7f-3e19-46e7-9771-3529b56a8ead
+println(observed_pixel_signal)
 
-	begin
-		# Define region to fit (e.g., 10x10 block)
-		i_range = 1:25
-		j_range = 1:25
-		
-		y_map = zeros(length(i_range), length(j_range))
-		Te_map = zeros(length(i_range), length(j_range))
-		
-		for (ii, i) in enumerate(i_range)
-		    for (jj, j) in enumerate(j_range)
-		        observed_pixel = noisy_cube[i, j, :]
-		        errors = fill(0.01, length(observed_pixel))
-		        function chi2_objective(params)
-		            y, Te = params
-		            model = expected_relSZ_2d(y, Te)
-		            n = min(length(observed_pixel), length(model))
-		            return chi2(observed_pixel[1:n], model[1:n], errors[1:n])
-		        end
-		        initial_guess = [1e-5, 10.0]
-		        result = optimize(chi2_objective, initial_guess, BFGS())
-		        best_fit = Optim.minimizer(result)
-		        y_map[ii, jj] = best_fit[1]
-		        Te_map[ii, jj] = best_fit[2]
-				println("Pixel (", i, ",", j, "): Best-fit y = ", best_fit[1], ", Best-fit Te = ", best_fit[2])
-		    end
-		end
-	end
+# ╔═╡ e411c32f-e42f-4139-8d0d-3c25d7a168ad
+#=╠═╡
+println(errors_halo)
   ╠═╡ =#
 
-# ╔═╡ 55e66a63-0d2d-4129-9f2d-36e4dd3f364c
+# ╔═╡ 8ac83124-6821-43e7-9577-7bd14604a786
+#=╠═╡
+println(Te_map_sig)
+  ╠═╡ =#
+
+# ╔═╡ fd431b91-4f70-4b99-a310-3f90021ba9ce
+# Plot chi2 map to visualize poor fits
+	heatmap(chi2_map, title="Chi² map", xlabel="j", ylabel="i", colorbar_title="chi²")
+
+# ╔═╡ e26129d7-6462-42fa-a753-980850a409ea
+# Plot the y-parameter map
+heatmap(y_map_sig, title="Best-fit y map", xlabel="j", ylabel="i", colorbar_title="y")
+	
+
+# ╔═╡ ec85d743-caa9-485f-a2fc-d332a5471180
+#=╠═╡
+# Plot the temperature map
+heatmap(Te_map_sig, title="Best-fit Te map", xlabel="j", ylabel="i", colorbar_title="Te (keV)")
+  ╠═╡ =#
+
+# ╔═╡ c641bf2e-eadc-4a8f-9f3a-4592934d5268
+#=╠═╡
 begin
-	i_range = 1:25
-	j_range = 1:25
+	heatmap(Te_map_sig; xlabel="i", ylabel="j", colorbar_title="y-weighted T / keV")
+	contour!(y_map_sig; levels=10, linewidth=1, color=:black)
 	
-	y_map = zeros(length(i_range), length(j_range))
-	Te_map = zeros(length(i_range), length(j_range))
-	chi2_map = zeros(length(i_range), length(j_range))
-	
+end
+  ╠═╡ =#
+
+# ╔═╡ edaf884e-d60e-4e1a-8009-8894e31c270f
+# ╠═╡ disabled = true
+#=╠═╡
+begin
 	for (ii, i) in enumerate(i_range)
 	    for (jj, j) in enumerate(j_range)
-	        observed_pixel_signal = signal_cube[i, j, :]
+	        observed_pixel_signal = noiseless_cube[i, j, :]
+	        errors_halo = halo_bands[:, 6]
+	        function chi2_objective(params)
+	            y, Te = params
+	            model = expected_relSZ_2d(y, Te)
+	            n = min(length(observed_pixel_signal), length(model))
+	            return chi2(observed_pixel_signal[1:n], model[1:n], errors_halo[1:n])
+	        end
+	        initial_guess = [1e-5, 8.0]
+	        result = optimize(chi2_objective, lower, upper, initial_guess, Fminbox(BFGS()))
+	        best_fit = Optim.minimizer(result)
+	        y_map_nl[ii, jj] = best_fit[1]
+	        Te_map_nl[ii, jj] = best_fit[2]
+	        chi2_map[ii, jj] = Optim.minimum(result)
+	        println("Pixel (", i, ",", j, "): Best-fit y = ", best_fit[1], ", Best-fit Te = ", best_fit[2])
+	        end
+	    end
+end
+  ╠═╡ =#
+
+# ╔═╡ 5dd98626-edb3-40a4-8d2a-26e6c2ece100
+# ╠═╡ disabled = true
+#=╠═╡
+# Plot the y-parameter map
+heatmap(y_map, title="Best-fit y map", xlabel="j", ylabel="i", colorbar_title="y")
+	
+  ╠═╡ =#
+
+# ╔═╡ 20e147e9-f413-4995-b92d-568138a418c4
+# ╠═╡ disabled = true
+#=╠═╡
+# Plot the temperature map
+heatmap(Te_map, title="Best-fit Te map", xlabel="j", ylabel="i", colorbar_title="Te (keV)")
+  ╠═╡ =#
+
+# ╔═╡ 30a6ef28-1283-4d82-b0f5-39c698d48e8a
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	heatmap(Te_map; xlabel="i", ylabel="j", colorbar_title="y-weighted T / keV")
+	contour!(y_map; levels=10, linewidth=1, color=:black)
+	
+end
+  ╠═╡ =#
+
+# ╔═╡ 485101db-5d22-4138-8bce-94aad0583e0b
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	for (ii, i) in enumerate(i_range)
+	    for (jj, j) in enumerate(j_range)
+	        observed_pixel_signal = noisy_cube[i, j, :]
 	        errors_halo = halo_bands[:, 6]
 	        function chi2_objective(params)
 	            y, Te = params
@@ -333,28 +315,32 @@ begin
 	        end
 	    end
 end
+  ╠═╡ =#
 
-# ╔═╡ 5ee6fa7f-3e19-46e7-9771-3529b56a8ead
-println(observed_pixel_signal)
-
-# ╔═╡ e411c32f-e42f-4139-8d0d-3c25d7a168ad
-println(errors_halo)
-
-# ╔═╡ 8ac83124-6821-43e7-9577-7bd14604a786
-println(Te_map)
-
-# ╔═╡ fd431b91-4f70-4b99-a310-3f90021ba9ce
-# Plot chi2 map to visualize poor fits
-	heatmap(chi2_map, title="Chi² map", xlabel="j", ylabel="i", colorbar_title="chi²")
-
-# ╔═╡ e26129d7-6462-42fa-a753-980850a409ea
+# ╔═╡ 498f8822-6c88-4970-94e6-8d0d0931c73b
+# ╠═╡ disabled = true
+#=╠═╡
 # Plot the y-parameter map
 heatmap(y_map, title="Best-fit y map", xlabel="j", ylabel="i", colorbar_title="y")
-	
 
-# ╔═╡ ec85d743-caa9-485f-a2fc-d332a5471180
+  ╠═╡ =#
+
+# ╔═╡ 4855bb4b-1cbe-4dab-9d99-85ac17a2153b
+# ╠═╡ disabled = true
+#=╠═╡
 # Plot the temperature map
 heatmap(Te_map, title="Best-fit Te map", xlabel="j", ylabel="i", colorbar_title="Te (keV)")
+  ╠═╡ =#
+
+# ╔═╡ 7b1dfcac-3416-4605-b233-008891df1959
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	heatmap(Te_map; xlabel="i", ylabel="j", colorbar_title="y-weighted T / keV")
+	contour!(y_map; levels=10, linewidth=1, color=:black)
+	
+end
+  ╠═╡ =#
 
 # ╔═╡ db82ef3e-d4da-4404-8a13-3b256cd5bb15
 begin
@@ -479,6 +465,169 @@ end
 	density(ys, Tes, xlabel="Compton y", ylabel="Te [keV]", title="Posterior Density: y vs Te")
   ╠═╡ =#
 
+# ╔═╡ e442e858-802c-49ef-9688-78c359707df1
+begin
+		# Chi² for non-relativistic
+		function chi2_rel_2d(params, observed, errors)
+	    	y, Te = params
+	    	model = expected_relSZ_2d(y, Te)
+	    	sum(((model .- observed) ./ errors).^2)
+		end
+		
+		
+	    result_nr = optimize(y -> chi2_model(y, expected_nrSZ, observed, nr_errors), 1e-6, 1e-3)
+	    best_y_nr = Optim.minimizer(result_nr)
+	    min_chi2_nr = Optim.minimum(result_nr)
+	
+	    initial_guess = [best_y_nr, 10.0]
+	    lower = [1e-6, 1.0]
+	    upper = [1e-3, 25.0]
+	    result_rel = optimize(params -> chi2_rel_2d(params, rel_expected, rel_errors), lower, upper, initial_guess, Fminbox())
+	    best_params_rel = Optim.minimizer(result_rel)
+	    best_y_rel, best_Te_rel = best_params_rel
+	    min_chi2_rel = Optim.minimum(result_rel)
+end
+
+# ╔═╡ 55e66a63-0d2d-4129-9f2d-36e4dd3f364c
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	i_range = 1:20
+	j_range = 1:20
+	
+	y_map_sig = zeros(length(i_range), length(j_range))
+	Te_map_sig = zeros(length(i_range), length(j_range))
+	chi2_map = zeros(length(i_range), length(j_range))
+	
+	for (ii, i) in enumerate(i_range)
+	    for (jj, j) in enumerate(j_range)
+	        observed_pixel_signal = signal_cube[i, j, :]
+	        errors_halo = halo_bands[:, 6]
+	        function chi2_objective(params)
+	            y, Te = params
+	            model = expected_relSZ_2d(y, Te)
+	            n = min(length(observed_pixel_signal), length(model))
+	            return chi2(observed_pixel_signal[1:n], model[1:n], errors_halo[1:n])
+	        end
+	        
+	        result = optimize(chi2_objective, lower, upper, initial_guess, Fminbox(BFGS()))
+	        best_fit = Optim.minimizer(result)
+	        y_map_sig[ii, jj] = best_fit[1]
+	        Te_map_sig[ii, jj] = best_fit[2]
+	        chi2_map[ii, jj] = Optim.minimum(result)
+	        println("Pixel (", i, ",", j, "): Best-fit y = ", best_fit[1], ", Best-fit Te = ", best_fit[2])
+	        end
+	    end
+end
+  ╠═╡ =#
+
+# ╔═╡ 3babab2d-e59a-4a9e-8230-73ef775dd5d7
+begin
+	using Distributions
+	NR_DOF = 9 - 1
+	R_DOF = 9 - 2
+
+	# Chi² for non-relativistic
+	function chi2_rel_2d(params, observed, errors)
+    	y, Te = params
+    	model = expected_relSZ_2d(y, Te)
+    	sum(((model .- observed) ./ errors).^2)
+	end
+	
+	
+    result_nr = optimize(y -> chi2_model(y, expected_nrSZ, observed, nr_errors), 1e-6, 1e-3)
+    best_y_nr = Optim.minimizer(result_nr)
+    min_chi2_nr = Optim.minimum(result_nr)
+
+    initial_guess = [best_y_nr, 10.0]
+    lower = [1e-6, 1.0]
+    upper = [1e-3, 25.0]
+    result_rel = optimize(params -> chi2_rel_2d(params, rel_expected, rel_errors), lower, upper, initial_guess, Fminbox())
+    best_params_rel = Optim.minimizer(result_rel)
+    best_y_rel, best_Te_rel = best_params_rel
+    min_chi2_rel = Optim.minimum(result_rel)
+
+    println("=== Results WITHOUT noise ===")
+    println("Best-fit y (Non-relativistic): ", best_y_nr, ", min χ²: ", min_chi2_nr)
+    println("Best-fit y (Relativistic): ", best_y_rel, ", Best-fit Te: ", best_Te_rel, ", min χ²: ", min_chi2_rel)
+
+    # --- Minimize WITH noise (single realization) ---
+    observed_noisy = add_noise_to_data(observed, nr_errors)
+    rel_expected_noisy = add_noise_to_data(rel_expected, rel_errors)
+
+    result_nr_noisy = optimize(y -> chi2_model(y, expected_nrSZ, observed_noisy, nr_errors), 1e-6, 1e-3)
+    best_y_nr_noisy = Optim.minimizer(result_nr_noisy)
+    min_chi2_nr_noisy = Optim.minimum(result_nr_noisy)
+
+    result_rel_noisy = optimize(params -> chi2_rel_2d(params, rel_expected_noisy, rel_errors), lower, upper, [best_y_nr_noisy, 10.0], Fminbox())
+    best_params_rel_noisy = Optim.minimizer(result_rel_noisy)
+    best_y_rel_noisy, best_Te_rel_noisy = best_params_rel_noisy
+    min_chi2_rel_noisy = Optim.minimum(result_rel_noisy)
+
+    println("\n=== Results WITH noise (single iteration) ===")
+    println("Best-fit y (Non-relativistic): ", best_y_nr_noisy, ", min χ²: ", min_chi2_nr_noisy)
+    println("Best-fit y (Relativistic): ", best_y_rel_noisy, ", Best-fit Te: ", best_Te_rel_noisy, ", min χ²: ", min_chi2_rel_noisy)
+
+    # --- Run experiment 100 times and average ---
+    n_trials = 100
+    y_nr_vals = zeros(n_trials)
+    chi2_nr_vals = zeros(n_trials)
+    y_rel_vals = zeros(n_trials)
+    Te_rel_vals = zeros(n_trials)
+    chi2_rel_vals = zeros(n_trials)
+
+    for i in 1:n_trials
+        obs_noisy = add_noise_to_data(observed, nr_errors)
+        rel_noisy = add_noise_to_data(rel_expected, rel_errors)
+
+        res_nr = optimize(y -> chi2_model(y, expected_nrSZ, obs_noisy, nr_errors), 1e-6, 1e-3)
+        y_nr_vals[i] = Optim.minimizer(res_nr)
+        chi2_nr_vals[i] = Optim.minimum(res_nr)
+
+        res_rel = optimize(params -> chi2_rel_2d(params, rel_noisy, rel_errors), lower, upper, [y_nr_vals[i], 10.0], Fminbox())
+        best_params = Optim.minimizer(res_rel)
+        y_rel_vals[i], Te_rel_vals[i] = best_params
+        chi2_rel_vals[i] = Optim.minimum(res_rel)
+    end
+
+    println("\n=== AVERAGE over $n_trials noise iterations ===")
+    println("Non-relativistic: <y> = ", mean(y_nr_vals), ", <χ²> = ", mean(chi2_nr_vals))
+    println("Relativistic: <y> = ", mean(y_rel_vals), ", <Te> = ", mean(Te_rel_vals), ", <χ²> = ", mean(chi2_rel_vals))
+	println("\n=== AVERAGE over 100 noise iterations w. DOF ===")
+	println("Non-relativistic: <y> = ", "<χ²> = ", (mean(chi2_nr_vals))/(NR_DOF))
+	println("Relativistic: <y> = ", "<χ²> = ", (mean(chi2_rel_vals))/(R_DOF))
+end
+
+# ╔═╡ 775de6ce-3814-48fe-b4c2-9925f21603d3
+
+	begin
+		# Define region to fit (e.g., 10x10 block)
+		i_range = 1:25
+		j_range = 1:25
+		
+		y_map = zeros(length(i_range), length(j_range))
+		Te_map = zeros(length(i_range), length(j_range))
+		
+		for (ii, i) in enumerate(i_range)
+		    for (jj, j) in enumerate(j_range)
+		        observed_pixel = noisy_cube[i, j, :]
+		        errors = fill(0.01, length(observed_pixel))
+		        function chi2_objective(params)
+		            y, Te = params
+		            model = expected_relSZ_2d(y, Te)
+		            n = min(length(observed_pixel), length(model))
+		            return chi2(observed_pixel[1:n], model[1:n], errors[1:n])
+		        end
+		        initial_guess = [1e-5, 10.0]
+		        result = optimize(chi2_objective, initial_guess, BFGS())
+		        best_fit = Optim.minimizer(result)
+		        y_map[ii, jj] = best_fit[1]
+		        Te_map[ii, jj] = best_fit[2]
+				println("Pixel (", i, ",", j, "): Best-fit y = ", best_fit[1], ", Best-fit Te = ", best_fit[2])
+		    end
+		end
+	end
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -529,7 +678,7 @@ UltraNest = "~0.1.0"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.6"
+julia_version = "1.11.7"
 manifest_format = "2.0"
 project_hash = "4e0cc374578bc644a920414621b26a9177e70f7b"
 
@@ -3199,11 +3348,13 @@ version = "1.9.2+0"
 # ╠═3babab2d-e59a-4a9e-8230-73ef775dd5d7
 # ╠═cfc6d6b9-653b-4144-b972-6907253a3af0
 # ╠═732ed520-9ebf-4d54-ab1a-ad2f5797143a
-# ╠═14ea106b-a1f2-45c7-85ee-f1bc45e4b3ae
 # ╠═15a567eb-363e-453c-aa49-a6f4e08e0114
+# ╠═3a191ed0-fcfe-4f05-b072-af2bee6f2214
+# ╠═14ea106b-a1f2-45c7-85ee-f1bc45e4b3ae
 # ╠═ab627c15-fe55-4e0f-8fae-e0ec5e7a8567
 # ╠═ba797ca7-b916-4c61-9995-26fa36031f0a
-# ╟─775de6ce-3814-48fe-b4c2-9925f21603d3
+# ╠═775de6ce-3814-48fe-b4c2-9925f21603d3
+# ╠═e442e858-802c-49ef-9688-78c359707df1
 # ╠═55e66a63-0d2d-4129-9f2d-36e4dd3f364c
 # ╠═5ee6fa7f-3e19-46e7-9771-3529b56a8ead
 # ╠═e411c32f-e42f-4139-8d0d-3c25d7a168ad
@@ -3211,6 +3362,15 @@ version = "1.9.2+0"
 # ╠═fd431b91-4f70-4b99-a310-3f90021ba9ce
 # ╠═e26129d7-6462-42fa-a753-980850a409ea
 # ╠═ec85d743-caa9-485f-a2fc-d332a5471180
+# ╠═c641bf2e-eadc-4a8f-9f3a-4592934d5268
+# ╠═edaf884e-d60e-4e1a-8009-8894e31c270f
+# ╠═5dd98626-edb3-40a4-8d2a-26e6c2ece100
+# ╠═20e147e9-f413-4995-b92d-568138a418c4
+# ╠═30a6ef28-1283-4d82-b0f5-39c698d48e8a
+# ╠═485101db-5d22-4138-8bce-94aad0583e0b
+# ╠═498f8822-6c88-4970-94e6-8d0d0931c73b
+# ╠═4855bb4b-1cbe-4dab-9d99-85ac17a2153b
+# ╠═7b1dfcac-3416-4605-b233-008891df1959
 # ╠═db82ef3e-d4da-4404-8a13-3b256cd5bb15
 # ╠═658866bf-e3a1-4744-81e1-977a572f123c
 # ╠═1e6b3942-6310-404b-88b6-b6039f0b2ee5
