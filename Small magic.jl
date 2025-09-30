@@ -287,57 +287,6 @@ begin
 end
   ╠═╡ =#
 
-# ╔═╡ 2e8d7e11-93bf-42d3-8530-f3018791c493
-begin
-    # Error estimate for each band (adjust as needed)
-	#take out first value in errors and model
-	halo_bands = load_numeric_matrix("sensitivity_calculations_halo.txt")
-	band_ids = halo_bands[:, 1]
-	sel = findall(b -> b in (3:10), band_ids)
-	errors_halo = halo_bands[sel, 6]
-
-	# to show what the values of each band are being compared in output
-	function dump_pixel_comparison(observed, params)
-    y, Te = params
-    model = expected_relSZ_2d(y, Te)[sel]
-    df = DataFrame(
-        band = band_ids[sel],
-        observed = observed,
-        model = model,
-        residual = model .- observed,
-        sigma = errors_halo)
-    println(df)
-	end
-	
-	# Define chi2 objective for this pixel
-    function chi2_objective(params, observed, errors_halo)
-		y, Te = params
-    	model_full = expected_relSZ_2d(y, Te)
-		model = model_full[sel]
-        sum(((model .- observed) ./ errors_halo).^2)
-    end
-
-    # Minimize chi2
-	initial_guess_halo = [1e-4, 10]
-    result_pix = optimize(params -> chi2_objective(params, observed_pixel_noisy, errors_halo), lower, upper, initial_guess_halo, Fminbox())
-	
-    # Store best-fit values
-
-	best_fit_pix = Optim.minimizer(result_pix)
-	chi2_pix = Optim.minimum(result_pix)
-	dump_pixel_comparison(observed_pixel_signal, best_fit_pix)
-    best_y_pix, best_Te_pix = best_fit_pix
-
-	println("Observed pixel length: ", length(observed_pixel_noisy))
-    println("Model output length: ", length(expected_relSZ_2d(1e-5, 8.0)[sel]))
-	println("Model pixel i, j: ",i ," ", j)
-    println("Best-fit y: ", best_y_pix)
-    println("Best-fit Te: ", best_Te_pix)
-	println("Chi squared: ", chi2_pix)
-	println(upper)
-	println(lower)
-end
-
 # ╔═╡ d9fd9ae2-10ec-4c32-89a3-3ceed7ee118e
 println(errors_halo)
 
@@ -843,6 +792,111 @@ end
 # Or use a density contour
 	density(ys, Tes, xlabel="Compton y", ylabel="Te [keV]", title="Posterior Density: y vs Te")
   ╠═╡ =#
+
+# ╔═╡ 2e8d7e11-93bf-42d3-8530-f3018791c493
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+    # Error estimate for each band (adjust as needed)
+	#take out first value in errors and model
+	halo_bands = load_numeric_matrix("sensitivity_calculations_halo.txt")
+	band_ids = halo_bands[:, 1]
+	sel = findall(b -> b in (3:10), band_ids)
+	errors_halo = halo_bands[sel, 6]
+
+	# to show what the values of each band are being compared in output
+	function dump_pixel_comparison(observed, params)
+    y, Te = params
+    model = expected_relSZ_2d(y, Te)[sel]
+    df = DataFrame(
+        band = band_ids[sel],
+        observed = observed,
+        model = model,
+        residual = model .- observed,
+        sigma = errors_halo)
+    println(df)
+	end
+	
+	# Define chi2 objective for this pixel
+    function chi2_objective(params, observed, errors_halo)
+		y, Te = params
+    	model_full = expected_relSZ_2d(y, Te)
+		model = model_full[sel]
+        sum(((model .- observed) ./ errors_halo).^2)
+    end
+
+    # Minimize chi2
+	initial_guess_halo = [1e-4, 10]
+    result_pix = optimize(params -> chi2_objective(params, observed_pixel_noisy, errors_halo), lower, upper, initial_guess_halo, Fminbox())
+	
+    # Store best-fit values
+
+	best_fit_pix = Optim.minimizer(result_pix)
+	chi2_pix = Optim.minimum(result_pix)
+	dump_pixel_comparison(observed_pixel_noisy, best_fit_pix)
+    best_y_pix, best_Te_pix = best_fit_pix
+
+	println("Observed pixel length: ", length(observed_pixel_noisy))
+    println("Model output length: ", length(expected_relSZ_2d(1e-5, 8.0)[sel]))
+	println("Model pixel i, j: ",i ," ", j)
+    println("Best-fit y: ", best_y_pix)
+    println("Best-fit Te: ", best_Te_pix)
+	println("Chi squared: ", chi2_pix)
+	println(upper)
+	println(lower)
+end
+  ╠═╡ =#
+
+# ╔═╡ c2bebcaf-905e-40ee-a3d7-cffb592ee804
+begin
+	# Error estimate for each band (adjust as needed)
+	#take out first value in errors and model
+	halo_bands = load_numeric_matrix("sensitivity_calculations_halo.txt")
+	band_ids = halo_bands[:, 1]
+	sel = findall(b -> b in (3:10), band_ids)
+	errors_halo = halo_bands[sel, 6]
+
+# to show what the values of each band are being compared in output
+	function dump_pixel_comparison(observed, params)
+    y, Te = params
+    model = expected_relSZ_2d(y, Te)[sel]
+    df = DataFrame(
+        band = band_ids[sel],
+        observed = observed,
+        model = model,
+        residual = model .- observed,
+        sigma = errors_halo)
+    println(df)
+	end
+	
+	# Define chi2 objective for this pixel
+    function chi2_objective(params, observed, errors_halo)
+		y, Te = params
+    	model_full = expected_relSZ_2d(y, Te)
+		model = model_full[sel]
+        sum(((model .- observed) ./ errors_halo).^2)
+    end
+
+    # Minimize chi2
+	initial_guess_halo = [1e-4, 10]
+    result_pix = optimize(params -> chi2_objective(params, observed_pixel_noiseless, errors_halo), lower, upper, initial_guess_halo, Fminbox())
+	
+    # Store best-fit values
+
+	best_fit_pix = Optim.minimizer(result_pix)
+	chi2_pix = Optim.minimum(result_pix)
+	dump_pixel_comparison(observed_pixel_noiseless, best_fit_pix)
+    best_y_pix, best_Te_pix = best_fit_pix
+
+	println("Observed pixel length: ", length(observed_pixel_noisy))
+    println("Model output length: ", length(expected_relSZ_2d(1e-5, 8.0)[sel]))
+	println("Model pixel i, j: ",i ," ", j)
+    println("Best-fit y: ", best_y_pix)
+    println("Best-fit Te: ", best_Te_pix)
+	println("Chi squared: ", chi2_pix)
+	println(upper)
+	println(lower)
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -3570,6 +3624,7 @@ version = "1.9.2+0"
 # ╠═ab627c15-fe55-4e0f-8fae-e0ec5e7a8567
 # ╠═ba797ca7-b916-4c61-9995-26fa36031f0a
 # ╠═2e8d7e11-93bf-42d3-8530-f3018791c493
+# ╠═c2bebcaf-905e-40ee-a3d7-cffb592ee804
 # ╠═d9fd9ae2-10ec-4c32-89a3-3ceed7ee118e
 # ╠═f37de0be-5d34-4a55-ba2d-6d354b129ac1
 # ╠═48167dd4-a252-4144-b606-e9f0d2e669fe
